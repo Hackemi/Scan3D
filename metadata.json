@@ -1,0 +1,10 @@
+{
+  "name": "Scan3D Studio - De Fotos a Modelo 3D",
+  "description": "Captura fotos de cualquier objeto con tu cámara y reconstrúyelo en un modelo 3D interactivo con IA, exportable en OBJ, STL y nube de puntos.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

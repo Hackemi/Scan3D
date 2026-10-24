@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="es" class="h-full bg-zinc-950">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Scan3D - App Móvil de Escaneo 3D</title>
+    <meta name="description" content="Toma fotos de cualquier objeto con tu teléfono y reconstrúyelo en un modelo 3D interactivo con IA." />
+    
+    <!-- Mobile PWA Meta -->
+    <meta name="theme-color" content="#09090b" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Scan3D" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+
+    <!-- OpenGraph / Social -->
+    <meta property="og:title" content="Scan3D - App Móvil de Escaneo 3D" />
+    <meta property="og:description" content="Toma fotos con la cámara de tu teléfono y crea modelos 3D interactivos con IA." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  </head>
+  <body class="h-full w-full overflow-hidden bg-zinc-950 text-zinc-100 antialiased select-none selection:bg-cyan-500/30 selection:text-cyan-200 touch-none">
+    <div id="root" class="h-full w-full"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

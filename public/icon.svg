@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#09090b" />
+      <stop offset="100%" stop-color="#18181b" />
+    </linearGradient>
+    <linearGradient id="cyanGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4" />
+      <stop offset="100%" stop-color="#3b82f6" />
+    </linearGradient>
+    <linearGradient id="cubeTop" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+    <linearGradient id="cubeLeft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0369a1" />
+      <stop offset="100%" stop-color="#075985" />
+    </linearGradient>
+    <linearGradient id="cubeRight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0ea5e9" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+  </defs>
+
+  <!-- Background rounded app squircle -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGrad)" />
+  <rect x="12" y="12" width="488" height="488" rx="100" fill="none" stroke="#27272a" stroke-width="6" />
+
+  <!-- Outer Holographic Target Scanner Corners -->
+  <path d="M 110 160 L 110 120 A 10 10 0 0 1 120 110 L 160 110" fill="none" stroke="#06b6d4" stroke-width="12" stroke-linecap="round" />
+  <path d="M 352 110 L 392 110 A 10 10 0 0 1 402 120 L 402 160" fill="none" stroke="#06b6d4" stroke-width="12" stroke-linecap="round" />
+  <path d="M 110 352 L 110 392 A 10 10 0 0 0 120 402 L 160 402" fill="none" stroke="#06b6d4" stroke-width="12" stroke-linecap="round" />
+  <path d="M 352 402 L 392 402 A 10 10 0 0 0 402 392 L 402 352" fill="none" stroke="#06b6d4" stroke-width="12" stroke-linecap="round" />
+
+  <!-- Central Isometric 3D Model -->
+  <!-- Top Face -->
+  <polygon points="256,160 346,212 256,264 166,212" fill="url(#cubeTop)" />
+  <!-- Left Face -->
+  <polygon points="166,212 256,264 256,368 166,316" fill="url(#cubeLeft)" />
+  <!-- Right Face -->
+  <polygon points="256,264 346,212 346,316 256,368" fill="url(#cubeRight)" />
+
+  <!-- Laser scan sweep bar -->
+  <line x1="140" y1="264" x2="372" y2="264" stroke="#f43f5e" stroke-width="6" stroke-linecap="round" opacity="0.9" />
+  <circle cx="256" cy="264" r="8" fill="#ffffff" />
+
+  <!-- Small Camera lens icon accent at bottom right -->
+  <circle cx="360" cy="360" r="36" fill="#09090b" stroke="#06b6d4" stroke-width="6" />
+  <circle cx="360" cy="360" r="16" fill="#3b82f6" />
+  <circle cx="366" cy="354" r="5" fill="#ffffff" opacity="0.8" />
+</svg>
