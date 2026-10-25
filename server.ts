@@ -65,41 +65,39 @@ app.post('/api/reconstruct-3d', async (req, res) => {
     }
 
     const categoryDirectives = {
+      auto: 'Determina automáticamente la forma geométrica REAL visible en las fotos. Si ves un cilindro, tubo, cavidad, orificios pasantes, aparato, caja o pieza mecánica, reconstrúyelo fielmente según las fotos.',
       pieza_3d: 'Enfócate en geometría de ingeniería mecánica precisa (biseles, chaflanes, orificios de montaje, espesor de pared y dimensiones en milímetros aptas para impresión 3D / CAD).',
-      hoyo: 'ES UN HOYO / CAVIDAD / ORIFICIO / MOLDE CÓNCAVO. Modela la cavidad hueca interior, el borde de la boca exterior, calcula el diámetro del orificio (Ø en mm), la profundidad interna hasta el fondo (en mm) y el volumen de llenado en cm³.',
+      hoyo: 'ES UN HOYO / CAVIDAD / ORIFICIO / CILINDRO PERFORADO. Modela la cavidad hueca interior, el borde de la boca exterior, calcula el diámetro del orificio (Ø en mm), la profundidad interna hasta el fondo (en mm) y cualquier orificio pasante transversal visible.',
       aparato: 'ES UN APARATO / DISPOSITIVO ELECTRÓNICO / GADGET. Modela el chasis unibody exterior, panel de pantalla o interfaz, botoneras táctiles, ranuras o puertos laterales.',
       general: 'Modela el objeto combinando silueta primaria, secundaria y acentos PBR.'
-    }[scanCategory as 'pieza_3d' | 'hoyo' | 'aparato' | 'general'] || '';
+    }[(scanCategory as 'auto' | 'pieza_3d' | 'hoyo' | 'aparato' | 'general') || 'auto'] || '';
 
     const promptText = `
 Eres un ingeniero experto en fotogrametría 3D computacional, metrología óptica y gráficos tridimensionales en Three.js.
-Analiza detenidamente la(s) foto(s) capturada(s) con la cámara del teléfono.
+Analiza detenidamente la(s) foto(s) capturada(s) con la cámara.
 
-Pistas del usuario: "${objectHint || 'Objeto capturado con cámara'}".
+Pistas del usuario: "${objectHint || 'Objeto capturado en fotos'}".
 Categoría seleccionada: "${scanCategory}".
 ${categoryDirectives}
 
 Tu objetivo es descomponer este objeto o cavidad en una representación 3D paramétrica precisa, estéticamente fiel y con MEDICIÓN MÉTRICA ESTIMADA REAL (ancho, alto, profundidad en cm y milímetros exactos).
 
-REGLAS DE RECONSTRUCCIÓN 3D:
-1. NUNCA representes el objeto con una sola primitiva básica genérica. Descompónlo en 4 a 12 partes jerárquicas:
-   - Silueta primaria (cuerpo central, tronco, carcasa, base principal).
-   - Silueta secundaria (asas, cuellos, bordes, tapas, suelas, patas, perillas, aberturas).
-   - Detalles de acento (rebordes, biseles, botones, ranuras, reflectores, texturas).
-2. Si es una CAVIDAD / HOYO ('hoyo'):
-   - Modela la masa exterior y la cavidad cilíndrica/cónica interna ('shapeType': 'lathe' o 'cylinder' con hollow interior).
-   - Estima el diámetro de la boca ('diameterMm') y la profundidad hasta el fondo ('internalDepthMm').
-3. Si es una PIEZA 3D ('pieza_3d'):
-   - Calcula volumen de material para impresión 3D ('volumeCm3') y peso aproximado en filamento PLA/PETG ('filamentWeightGrams').
-4. Ajusta materiales PBR con colorimetría real extraída de las fotografías (rugosidad, metalicidad, color dominante).
+REGLAS CRÍTICAS DE RECONSTRUCCIÓN:
+1. NUNCA asumas por defecto que el objeto es un "Soporte Mecánico" a menos que la imagen lo muestre claramente. Si la foto muestra un cilindro con hoyos, un tubo, un envase, una caja o cualquier otro objeto, GENERA ESA FORMA REAL EXACTA.
+2. Si es una CAVIDAD / HOYO O CILINDRO CON HOYOS / ORIFICIOS:
+   - Modela la masa exterior y la cavidad cilíndrica/cónica interna ('shapeType': 'tube', 'lathe' o 'cylinder' con hollow interior).
+   - Si el cilindro tiene hoyos o perforaciones transversales en las paredes, modela los orificios de cruce ('cylinder' orientado a 90° con color contrastante como rojo #ef4444 o ámbar #f59e0b) y el chaflán de boca ('torus').
+   - Estima el diámetro de la boca ('diameterMm'), la profundidad hasta el fondo ('internalDepthMm') y espesor de pared.
+3. Descompón el objeto en 4 a 10 componentes funcionales jerárquicos.
+4. ASIGNA COLORES DIFERENCIADOS Y REALES: Extrae los colores predominantes reales de las fotos para el cuerpo, pero usa colores contrastantes de ingeniería para orificios y cavidades interiores para que se distingan claramente los detalles.
 5. Genera entre 60 y 140 muestras de nube de puntos superficial [x, y, z, hexColor].
 
 Devuelve EXCLUSIVAMENTE un objeto JSON válido con este formato exacto:
 {
-  "name": "Nombre descriptivo en español (ej. Soporte de Montaje Mecánico 3D / Cavidad Cilíndrica)",
-  "category": "${scanCategory}",
+  "name": "Nombre descriptivo real basado en lo que se ve en las fotos (ej. Cilindro Perforado con Hoyos / Vaso Cilíndrico / Carcasa Electrónica)",
+  "category": "${scanCategory === 'auto' ? 'general' : scanCategory}",
   "scanCategory": "${scanCategory}",
-  "description": "Descripción física detallada y métricas estimadas",
+  "description": "Descripción física detallada del objeto visto en las fotos y sus métricas",
   "dimensions": { "width": 12, "height": 8.5, "depth": 10 },
   "measurements": {
     "widthMm": 120,

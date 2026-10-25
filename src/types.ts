@@ -9,7 +9,23 @@ export interface CapturedPhoto {
   height?: number;
   is4K?: boolean;
   resolutionLabel?: string;
+  pitch?: number; // degrees from horizontal: 0=flat, 45=oblique, 80-90=zenith (top)
+  roll?: number; // left/right tilt: 0=level
+  yaw?: number; // orbit degree: 0-360
+  distanceCm?: number; // estimated distance in cm
+  ring?: 'low' | 'mid' | 'zenith';
 }
+
+export interface ScanCoverageInfo {
+  totalPhotos: number;
+  lowRingCovered: number; // 0 to 8 sectors
+  midRingCovered: number; // 0 to 8 sectors
+  zenithCovered: number; // 0 to 4 sectors
+  hasTopHoleView: boolean;
+  coveragePercent: number;
+  missingHints: string[];
+}
+
 
 export type ShapeType =
   | 'cylinder'
@@ -21,7 +37,7 @@ export type ShapeType =
   | 'capsule'
   | 'tube';
 
-export type ScanCategory = 'pieza_3d' | 'hoyo' | 'aparato' | 'general';
+export type ScanCategory = 'auto' | 'pieza_3d' | 'hoyo' | 'aparato' | 'general';
 
 export type LensType = 'ultrawide' | 'main' | 'telephoto';
 
@@ -53,9 +69,12 @@ export interface ComponentDefinition {
     depth?: number;
     capSegments?: number;
     arc?: number;
+    innerRadius?: number;
+    holeDepth?: number;
   };
   lathePoints?: Array<[number, number]>;
   material: ComponentMaterial;
+  visible?: boolean;
 }
 
 export interface ModelMeasurements {
@@ -68,6 +87,8 @@ export interface ModelMeasurements {
   wallThicknessMm?: number;
   filamentWeightGrams?: number;
   toleranceMm?: number;
+  holeDiameterMm?: number;
+  holeCount?: number;
 }
 
 export interface Model3DData {
@@ -98,9 +119,33 @@ export interface Model3DData {
   source: 'gemini-3.8-flash' | 'local-photogrammetry' | 'sample-preset';
   thumbnailUrl?: string;
   photosCount: number;
+  textureUrl?: string;
+  sourcePhotos?: CapturedPhoto[];
 }
 
-export type RenderMode = 'textured' | 'wireframe' | 'pointcloud' | 'normals' | 'clay';
+export type RenderMode =
+  | 'textured'
+  | 'photo_texture'
+  | 'contrast_colors'
+  | 'wireframe'
+  | 'pointcloud'
+  | 'normals'
+  | 'elevation'
+  | 'cavity'
+  | 'clay';
+
+export interface ClipPlaneConfig {
+  enabled: boolean;
+  axis: 'x' | 'y' | 'z';
+  position: number;
+  inverted: boolean;
+}
+
+export interface BoundingCropConfig {
+  enabled: boolean;
+  minY: number;
+  maxY: number;
+}
 
 export type EnvironmentPreset = 'studio' | 'cyber' | 'warm' | 'dark';
 

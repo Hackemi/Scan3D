@@ -1,30 +1,22 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import {
   Camera,
-  RotateCcw,
   Sparkles,
   Upload,
   Trash2,
   Crosshair,
   Grid,
-  Zap,
-  Info,
   Play,
   Pause,
   Disc,
-  RotateCw,
-  Timer,
   Smartphone,
-  ChevronRight,
   HelpCircle,
   X,
   Keyboard,
   Layers,
-  CheckCircle2,
-  Copy,
-  Check,
-  Maximize2,
   FolderOpen,
+  ArrowRight,
+  Target,
 } from 'lucide-react';
 import { CapturedPhoto, ScanCategory, CaptureResolution } from '../types';
 import { soundEffects } from '../utils/audio';
@@ -47,22 +39,23 @@ interface DesktopStudioProps {
 }
 
 const CATEGORIES: Array<{ id: ScanCategory; label: string; icon: string; desc: string }> = [
-  { id: 'pieza_3d', label: 'Pieza 3D / CAD', icon: '🧩', desc: 'Repuestos de ingeniería, bridas, engranajes y piezas con tolerancias para impresión 3D' },
-  { id: 'hoyo', label: 'Hoyo / Cavidad', icon: '🕳️', desc: 'Orificios, moldes cóncavos con cálculo de diámetro (Ø), profundidad y volumen' },
-  { id: 'aparato', label: 'Aparato / Electrónica', icon: '📱', desc: 'Dispositivos, carcasas, controles táctiles y gadgets' },
-  { id: 'general', label: 'General / Vajilla', icon: '🏺', desc: 'Recipientes, calzado, figuras y objetos de revolución' },
+  { id: 'auto', label: 'Auto-Detección', icon: '✨', desc: 'Detecta automáticamente cilindros, cavidades u objetos de las fotos' },
+  { id: 'hoyo', label: 'Hoyos / Cavidad', icon: '🕳️', desc: 'Cilindros perforados, orificios pasantes y cavidades cóncavas' },
+  { id: 'pieza_3d', label: 'Pieza CAD', icon: '🧩', desc: 'Repuestos de ingeniería, bridas y piezas para impresión 3D' },
+  { id: 'aparato', label: 'Aparato', icon: '📱', desc: 'Dispositivos electrónicos, chasis y gadgets' },
+  { id: 'general', label: 'General', icon: '🏺', desc: 'Vajilla, envases, calzado y objetos de revolución' },
 ];
 
 const GUIDED_ANGLES = [
-  { id: 'front', label: 'Frente 0°', deg: 0, hint: 'Vista frontal directa' },
-  { id: 'front-right', label: 'Diagonal Der 45°', deg: 45, hint: 'Gira 45° hacia la derecha' },
-  { id: 'right', label: 'Lateral Der 90°', deg: 90, hint: 'Perfil derecho' },
-  { id: 'back-right', label: 'Trasero Der 135°', deg: 135, hint: 'Tres cuartos posterior' },
-  { id: 'back', label: 'Posterior 180°', deg: 180, hint: 'Vista trasera completa' },
-  { id: 'back-left', label: 'Trasero Izq 225°', deg: 225, hint: 'Tres cuartos posterior izq' },
-  { id: 'left', label: 'Lateral Izq 270°', deg: 270, hint: 'Perfil izquierdo' },
-  { id: 'front-left', label: 'Diagonal Izq 315°', deg: 315, hint: 'Cerrando ciclo frontal' },
-  { id: 'top', label: 'Cenital 45°', deg: 360, hint: 'Inclinado desde arriba para cerrar tapas/cavidades' },
+  { id: 'front', label: 'Frente 0°' },
+  { id: 'front-right', label: 'Diagonal 45°' },
+  { id: 'right', label: 'Lateral 90°' },
+  { id: 'back-right', label: 'Posterior 135°' },
+  { id: 'back', label: 'Trasero 180°' },
+  { id: 'back-left', label: 'Posterior 225°' },
+  { id: 'left', label: 'Lateral 270°' },
+  { id: 'front-left', label: 'Diagonal 315°' },
+  { id: 'top', label: 'Cenital 45°' },
 ];
 
 export const DesktopStudio: React.FC<DesktopStudioProps> = ({
@@ -87,49 +80,50 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
   const [selectedDeviceId, setSelectedDeviceId] = useState<string>('');
   const [resolution, setResolution] = useState<CaptureResolution>('4k');
   const [isCapturing, setIsCapturing] = useState<boolean>(false);
-  const [showGrid, setShowGrid] = useState<boolean>(true);
+  const [showGrid, setShowGrid] = useState<boolean>(false);
   const [showCrosshair, setShowCrosshair] = useState<boolean>(true);
   const [flashEffect, setFlashEffect] = useState<boolean>(false);
+
+  // Turntable / Automatic cadence
+  const [isAutoTurntable, setIsAutoTurntable] = useState<boolean>(false);
+  const [autoCountdown, setAutoCountdown] = useState<number | null>(null);
+  const [autoCadenceSeconds] = useState<number>(3);
+  const [autoCreateOnFinish, setAutoCreateOnFinish] = useState<boolean>(true);
+
   const [currentAngleIndex, setCurrentAngleIndex] = useState<number>(0);
   const [objectHint, setObjectHint] = useState<string>('');
   const [previewPhoto, setPreviewPhoto] = useState<CapturedPhoto | null>(null);
-  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [isDragOver, setIsDragOver] = useState<boolean>(false);
   const [showTutorial, setShowTutorial] = useState<boolean>(false);
+  const [showSampleModal, setShowSampleModal] = useState<boolean>(false);
 
-  // Auto Turntable (Giro de Objeto) Mode on Desktop
-  const [isAutoTurntable, setIsAutoTurntable] = useState<boolean>(false);
-  const [autoCadenceSeconds, setAutoCadenceSeconds] = useState<number>(3);
-  const [autoCountdown, setAutoCountdown] = useState<number | null>(null);
-  const [autoCreateOnFinish, setAutoCreateOnFinish] = useState<boolean>(true);
-  const [showAutoCompletionModal, setShowAutoCompletionModal] = useState<boolean>(false);
-  const [autoLaunchSeconds, setAutoLaunchSeconds] = useState<number>(3);
-
-  // Enumerate video devices on PC
+  // Enumerate video devices
   useEffect(() => {
     async function getDevices() {
       try {
-        const devs = await navigator.mediaDevices.enumerateDevices();
-        const videoDevs = devs.filter((d) => d.kind === 'videoinput');
+        if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) return;
+        const allDevices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevs = allDevices.filter((d) => d.kind === 'videoinput');
         setDevices(videoDevs);
         if (videoDevs.length > 0 && !selectedDeviceId) {
           setSelectedDeviceId(videoDevs[0].deviceId);
         }
-      } catch (e) {
-        console.warn('Could not enumerate cameras', e);
+      } catch (err) {
+        console.warn('Could not list media devices:', err);
       }
     }
     getDevices();
-  }, [cameraActive]);
+  }, [selectedDeviceId]);
 
-  // Start webcam on PC with 4K resolution request
+  // Start Camera
   const startCamera = useCallback(async () => {
-    setCameraError(null);
-    try {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((track) => track.stop());
-      }
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
 
-      const constraints = getCameraConstraints('environment', resolution, selectedDeviceId || undefined);
+    try {
+      const constraints = getCameraConstraints('user', resolution, selectedDeviceId);
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       streamRef.current = stream;
 
@@ -137,24 +131,21 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
         videoRef.current.srcObject = stream;
         videoRef.current.play();
         setCameraActive(true);
+        setCameraError(null);
       }
     } catch (err: any) {
-      console.warn('Desktop 4K camera access issue, trying standard stream:', err);
+      console.warn('HD camera initialization error, falling back:', err);
       try {
-        const fallback = await navigator.mediaDevices.getUserMedia({
-          video: selectedDeviceId ? { deviceId: { exact: selectedDeviceId } } : true,
-          audio: false,
-        });
+        const fallback = await navigator.mediaDevices.getUserMedia({ video: true });
         streamRef.current = fallback;
         if (videoRef.current) {
           videoRef.current.srcObject = fallback;
           videoRef.current.play();
           setCameraActive(true);
+          setCameraError(null);
         }
       } catch (fallbackErr) {
-        setCameraError(
-          'Cámara web no detectada o permiso denegado. Puedes arrastrar y soltar fotos directamente desde tu PC o cargar muestras.'
-        );
+        setCameraError('Cámara web no disponible. Puedes subir fotos directamente desde tu PC o cargar un modelo de muestra.');
         setCameraActive(false);
       }
     }
@@ -169,7 +160,7 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
     };
   }, [startCamera]);
 
-  // Capture high-resolution photo from PC webcam
+  // Capture photo
   const capturePhoto = useCallback(async () => {
     if (!videoRef.current || !streamRef.current || isCapturing) return;
 
@@ -178,7 +169,7 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
       soundEffects.playShutter();
       triggerHaptic('shutter');
       setFlashEffect(true);
-      setTimeout(() => setFlashEffect(false), 120);
+      setTimeout(() => setFlashEffect(false), 100);
 
       const targetAngle = GUIDED_ANGLES[currentAngleIndex % GUIDED_ANGLES.length];
       const newPhoto = await takeHighResPhoto(
@@ -189,6 +180,12 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
         targetAngle.label
       );
 
+      newPhoto.pitch = currentAngleIndex === 8 ? 80 : 45;
+      newPhoto.roll = 0;
+      newPhoto.yaw = (photos.length * 45) % 360;
+      newPhoto.distanceCm = 35;
+      newPhoto.ring = newPhoto.pitch >= 68 ? 'zenith' : 'mid';
+
       onAddPhoto(newPhoto);
       setCurrentAngleIndex((prev) => (prev + 1) % GUIDED_ANGLES.length);
     } catch (e) {
@@ -198,7 +195,7 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
     }
   }, [currentAngleIndex, onAddPhoto, resolution, isCapturing]);
 
-  // Turntable Cadence Timer for Desktop
+  // Turntable timer
   useEffect(() => {
     if (!isAutoTurntable) {
       setAutoCountdown(null);
@@ -207,62 +204,27 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
 
     let seconds = Math.ceil(autoCadenceSeconds);
     setAutoCountdown(seconds);
-    soundEffects.playCountdown(false);
-    triggerHaptic('countdown');
 
     const interval = setInterval(() => {
       seconds -= 1;
       if (seconds > 0) {
         setAutoCountdown(seconds);
         soundEffects.playCountdown(false);
-        triggerHaptic('countdown');
       } else if (seconds === 0) {
         setAutoCountdown(0);
         capturePhoto();
       } else {
         seconds = Math.ceil(autoCadenceSeconds);
         setAutoCountdown(seconds);
-        soundEffects.playCountdown(false);
-        triggerHaptic('countdown');
       }
     }, 1000);
 
     return () => clearInterval(interval);
   }, [isAutoTurntable, autoCadenceSeconds, capturePhoto]);
 
-  // Completion detection when 8 photos reached
-  useEffect(() => {
-    if (isAutoTurntable && photos.length >= 8) {
-      setIsAutoTurntable(false);
-      setAutoCountdown(null);
-      soundEffects.playSuccess();
-      triggerHaptic('complete');
-      setShowAutoCompletionModal(true);
-      setAutoLaunchSeconds(3);
-    }
-  }, [photos.length, isAutoTurntable]);
-
-  // Auto-launch countdown effect
-  useEffect(() => {
-    if (!showAutoCompletionModal || !autoCreateOnFinish) return;
-
-    if (autoLaunchSeconds <= 0) {
-      setShowAutoCompletionModal(false);
-      onStartReconstruction(objectHint);
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      setAutoLaunchSeconds((prev) => prev - 1);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [showAutoCompletionModal, autoLaunchSeconds, autoCreateOnFinish, objectHint, onStartReconstruction]);
-
-  // Keyboard shortcuts on PC: Spacebar to capture, Enter to reconstruct
+  // Keyboard shortcut: Space to capture, Enter to reconstruct
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if user is typing in an input
       if ((e.target as HTMLElement).tagName === 'INPUT') return;
 
       if (e.code === 'Space') {
@@ -278,187 +240,181 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [capturePhoto, photos.length, objectHint, onStartReconstruction]);
 
-  // Clipboard Paste support on PC (Ctrl+V)
-  useEffect(() => {
-    const handlePaste = (e: ClipboardEvent) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-
-      for (let i = 0; i < items.length; i++) {
-        if (items[i].type.indexOf('image') !== -1) {
-          const file = items[i].getAsFile();
-          if (file) {
-            const reader = new FileReader();
-            reader.onload = (loadEvent) => {
-              const dataUrl = loadEvent.target?.result as string;
-              if (dataUrl) {
-                const img = new Image();
-                img.onload = () => {
-                  const is4K = img.width >= 3200 || img.height >= 3200;
-                  const angleLabel = GUIDED_ANGLES[(photos.length) % GUIDED_ANGLES.length].label;
-                  onAddPhoto({
-                    id: `paste-${Date.now()}`,
-                    dataUrl,
-                    angleLabel,
-                    timestamp: Date.now(),
-                    width: img.width,
-                    height: img.height,
-                    is4K,
-                    resolutionLabel: `${img.width} × ${img.height} ${is4K ? '(4K UHD)' : '(FHD)'}`,
-                  });
-                  soundEffects.playBlip();
-                };
-                img.src = dataUrl;
-              }
-            };
-            reader.readAsDataURL(file);
-          }
-        }
-      }
-    };
-
-    window.addEventListener('paste', handlePaste);
-    return () => window.removeEventListener('paste', handlePaste);
-  }, [photos.length, onAddPhoto]);
-
-  // Drag and drop handler
+  // Drag and drop photos support
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(false);
+    setIsDragOver(false);
 
-    const files = e.dataTransfer.files;
-    if (!files || files.length === 0) return;
+    const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('image/'));
+    if (files.length === 0) return;
 
-    Array.from(files).forEach((file, idx) => {
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (loadEvent) => {
-          const dataUrl = loadEvent.target?.result as string;
-          if (dataUrl) {
-            const img = new Image();
-            img.onload = () => {
-              const is4K = img.width >= 3200 || img.height >= 3200;
-              const angleLabel = GUIDED_ANGLES[(photos.length + idx) % GUIDED_ANGLES.length].label;
-              onAddPhoto({
-                id: `drag-${Date.now()}-${idx}`,
-                dataUrl,
-                angleLabel,
-                timestamp: Date.now(),
-                width: img.width,
-                height: img.height,
-                is4K,
-                resolutionLabel: `${img.width} × ${img.height} ${is4K ? '(4K UHD)' : '(FHD)'}`,
-              });
-            };
-            img.src = dataUrl;
-          }
-        };
-        reader.readAsDataURL(file);
-      }
+    files.forEach((file, index) => {
+      const reader = new FileReader();
+      reader.onload = (loadEvent) => {
+        const dataUrl = loadEvent.target?.result as string;
+        if (dataUrl) {
+          const img = new Image();
+          img.onload = () => {
+            onAddPhoto({
+              id: `drag-${Date.now()}-${index}`,
+              dataUrl,
+              angleLabel: GUIDED_ANGLES[(photos.length + index) % GUIDED_ANGLES.length].label,
+              timestamp: Date.now(),
+              width: img.width,
+              height: img.height,
+              is4K: img.width >= 3200,
+              resolutionLabel: `${img.width} × ${img.height}`,
+            });
+          };
+          img.src = dataUrl;
+        }
+      };
+      reader.readAsDataURL(file);
     });
-
-    soundEffects.playSuccess();
+    soundEffects.playBlip();
   };
 
-  const currentGuide = GUIDED_ANGLES[currentAngleIndex % GUIDED_ANGLES.length];
-  const activeCategory = CATEGORIES.find((c) => c.id === selectedCategory) || CATEGORIES[0];
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    Array.from(files).forEach((file, index) => {
+      const reader = new FileReader();
+      reader.onload = (loadEvent) => {
+        const dataUrl = loadEvent.target?.result as string;
+        if (dataUrl) {
+          const img = new Image();
+          img.onload = () => {
+            onAddPhoto({
+              id: `upload-${Date.now()}-${index}`,
+              dataUrl,
+              angleLabel: GUIDED_ANGLES[(photos.length + index) % GUIDED_ANGLES.length].label,
+              timestamp: Date.now(),
+              width: img.width,
+              height: img.height,
+              is4K: img.width >= 3200,
+              resolutionLabel: `${img.width} × ${img.height}`,
+            });
+          };
+          img.src = dataUrl;
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const activeCategoryObj = CATEGORIES.find((c) => c.id === selectedCategory) || CATEGORIES[0];
+  const orbitProgress = Math.min(100, (photos.length / 8) * 100);
 
   return (
-    <div
-      onDragOver={(e) => {
-        e.preventDefault();
-        setIsDragging(true);
-      }}
-      onDragLeave={() => setIsDragging(false)}
-      onDrop={handleDrop}
-      className="relative flex flex-col w-full h-full bg-zinc-950 text-zinc-100 select-none overflow-hidden"
-    >
-      {/* Top PC Studio Navigation Bar */}
-      <header className="h-14 bg-zinc-900 border-b border-zinc-800 px-6 flex items-center justify-between shrink-0 z-30">
+    <div className="flex flex-col h-full w-full bg-zinc-950 text-white select-none overflow-hidden">
+      {/* Top Application Bar */}
+      <header className="h-13 bg-zinc-900 border-b border-zinc-800 px-5 flex items-center justify-between z-30 shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/25">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-md shadow-cyan-500/20">
             <Camera className="w-4 h-4 text-white" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-sm tracking-tight text-white">Scan3D Studio</span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800/80 font-semibold">
-                EDICIÓN PC EN NAVEGADOR
+              <span className="text-sm font-bold tracking-tight text-white">Scan3D Studio</span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-cyan-950/80 border border-cyan-500/40 text-cyan-300 font-semibold">
+                Fotogrametría 3D
               </span>
             </div>
-            <p className="text-[11px] text-zinc-400">Fotogrametría 3D y Metrología Computacional de Alta Resolución</p>
           </div>
         </div>
 
-        {/* Center / Right controls */}
-        <div className="flex items-center gap-2.5">
-          {/* 4K Ultra HD Toggle */}
+        {/* Clean Utility Group */}
+        <div className="flex items-center gap-2">
+          {/* Resolution button */}
           <button
-            onClick={() => {
-              triggerHaptic('medium');
-              setResolution((prev) => (prev === '4k' ? '1080p' : '4k'));
-              soundEffects.playBlip();
-            }}
-            className={`px-3 py-1.5 rounded-xl border text-xs font-mono font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm ${
+            onClick={() => setResolution((prev) => (prev === '4k' ? '1080p' : '4k'))}
+            className={`px-3 py-1.5 rounded-xl text-xs font-mono font-bold border transition-colors flex items-center gap-1.5 cursor-pointer ${
               resolution === '4k'
-                ? 'bg-amber-400 border-amber-300 text-black shadow-amber-400/25'
+                ? 'bg-amber-400/10 border-amber-400/50 text-amber-300'
                 : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:text-white'
             }`}
-            title="Alternar resolución: 4K Ultra HD (3840×2160) vs 1080p FHD"
           >
-            <span>{resolution === '4k' ? '4K UHD (3840×2160) ★' : '1080p FHD'}</span>
+            <span className={`w-1.5 h-1.5 rounded-full ${resolution === '4k' ? 'bg-amber-400' : 'bg-cyan-400'}`} />
+            <span>{resolution === '4k' ? '4K UHD' : '1080p FHD'}</span>
           </button>
 
-          {/* Tutorial modal button */}
+          {/* Grid toggle */}
+          <button
+            onClick={() => setShowGrid((v) => !v)}
+            className={`p-2 rounded-xl border text-xs transition-colors cursor-pointer ${
+              showGrid
+                ? 'bg-cyan-950 border-cyan-500 text-cyan-300'
+                : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
+            }`}
+            title="Cuadrícula"
+          >
+            <Grid className="w-4 h-4" />
+          </button>
+
+          {/* Crosshair toggle */}
+          <button
+            onClick={() => setShowCrosshair((v) => !v)}
+            className={`p-2 rounded-xl border text-xs transition-colors cursor-pointer ${
+              showCrosshair
+                ? 'bg-cyan-950 border-cyan-500 text-cyan-300'
+                : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
+            }`}
+            title="Retícula"
+          >
+            <Crosshair className="w-4 h-4" />
+          </button>
+
+          {/* Tutorial */}
           <button
             onClick={() => setShowTutorial(true)}
-            className="px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 hover:bg-amber-500/20 text-amber-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
+            className="p-2 rounded-xl bg-zinc-800 border border-zinc-700 text-zinc-300 hover:text-white transition-colors cursor-pointer"
+            title="Guía y Consejos"
           >
-            <HelpCircle className="w-4 h-4 text-amber-400" />
-            <span>Guía de Rotación 3D</span>
+            <HelpCircle className="w-4 h-4" />
           </button>
 
-          {/* Android APK Modal Trigger */}
-          <button
-            onClick={onOpenAndroidApk}
-            className="px-3.5 py-1.5 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-500/40 text-emerald-300 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-sm"
-            title="Instalador WebAPK y Proyecto Android"
-          >
-            <Smartphone className="w-4 h-4 text-emerald-400" />
-            <span>App Android (.APK)</span>
-          </button>
-
-          {/* Switch to phone mobile layout */}
+          {/* Switch to phone simulation */}
           <button
             onClick={onSwitchToPhoneView}
-            className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-medium border border-zinc-700 flex items-center gap-1.5 transition-all cursor-pointer"
-            title="Ver en marco de Smartphone"
+            className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-xs font-medium text-zinc-300 hover:text-white flex items-center gap-1.5 transition-colors cursor-pointer"
+            title="Cambiar a Vista Móvil"
           >
-            <Smartphone className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Vista Móvil</span>
+            <Smartphone className="w-4 h-4 text-cyan-400" />
+            <span className="hidden sm:inline">Vista Móvil</span>
           </button>
         </div>
       </header>
 
-      {/* Main Dual-Column PC Workspace */}
+      {/* Main Studio Body: Left Viewfinder, Right Workbench */}
       <div className="flex-1 flex overflow-hidden">
-        {/* Left / Center: High-Resolution Viewfinder & Drag-Drop Area */}
-        <div className="flex-1 flex flex-col relative bg-black overflow-hidden border-r border-zinc-800/80">
-          {/* Drag & drop overlay indicator */}
-          {isDragging && (
-            <div className="absolute inset-0 z-40 bg-cyan-950/80 border-4 border-dashed border-cyan-400 flex flex-col items-center justify-center backdrop-blur-sm animate-in fade-in">
+        {/* Left: Clean Viewfinder Section */}
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setIsDragOver(true);
+          }}
+          onDragLeave={() => setIsDragOver(false)}
+          onDrop={handleDrop}
+          className="relative flex-1 bg-black flex flex-col justify-between overflow-hidden"
+        >
+          {/* Drag Overlay */}
+          {isDragOver && (
+            <div className="absolute inset-0 bg-cyan-950/90 border-4 border-dashed border-cyan-400 z-50 flex flex-col items-center justify-center p-6 text-center animate-in fade-in">
               <FolderOpen className="w-16 h-16 text-cyan-400 animate-bounce mb-3" />
-              <h3 className="text-lg font-bold text-white">Suelta aquí las fotos de tu objeto</h3>
-              <p className="text-xs text-cyan-300">Se añadirán a la secuencia fotogramétrica 360°</p>
+              <h3 className="text-lg font-bold text-white">Suelta las fotos aquí</h3>
+              <p className="text-xs text-cyan-300">Se agregarán a la secuencia de fotogrametría</p>
             </div>
           )}
 
-          {/* Flash screen feedback */}
+          {/* Flash Effect */}
           {flashEffect && (
-            <div className="absolute inset-0 bg-white z-30 opacity-90 transition-opacity duration-100 pointer-events-none" />
+            <div className="absolute inset-0 bg-white z-40 opacity-90 transition-opacity duration-100 pointer-events-none" />
           )}
 
-          {/* Video viewfinder */}
+          {/* Video Feed */}
           <div className="relative flex-1 w-full h-full flex items-center justify-center overflow-hidden">
             <video
               ref={videoRef}
@@ -468,186 +424,145 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
               className="w-full h-full object-cover"
             />
 
-            {/* Error or No Webcam fallback */}
+            {/* Camera Error State */}
             {cameraError && (
               <div className="absolute inset-0 flex flex-col items-center justify-center p-8 bg-zinc-950/95 z-20 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center mb-4 text-cyan-400">
-                  <Camera className="w-8 h-8" />
+                <div className="w-14 h-14 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center mb-3 text-cyan-400">
+                  <Camera className="w-7 h-7" />
                 </div>
-                <h3 className="text-base font-bold text-white mb-2">Visor de Cámara PC</h3>
-                <p className="text-xs text-zinc-400 mb-6 max-w-md leading-relaxed">
-                  {cameraError}
-                </p>
-
-                <div className="flex flex-wrap gap-3 justify-center">
+                <h3 className="text-sm font-bold text-white mb-1.5">Cámara de PC</h3>
+                <p className="text-xs text-zinc-400 mb-5 max-w-sm">{cameraError}</p>
+                <div className="flex items-center gap-2">
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs flex items-center gap-2 shadow-lg cursor-pointer"
+                    className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs flex items-center gap-1.5 cursor-pointer shadow-lg"
                   >
                     <Upload className="w-4 h-4" />
-                    Seleccionar Fotos desde el PC
+                    Subir Fotos desde PC
                   </button>
                   <button
-                    onClick={() => onSelectSample('sample-bracket-3d')}
-                    className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium cursor-pointer"
+                    onClick={() => setShowSampleModal(true)}
+                    className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium cursor-pointer"
                   >
-                    Cargar Muestra: Pieza 3D CAD
+                    Ver Muestras
                   </button>
                 </div>
               </div>
             )}
 
-            {/* Viewfinder Overlays */}
-            {cameraActive && (
-              <>
-                {showGrid && (
-                  <div className="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 z-10 opacity-20">
-                    <div className="border-r border-b border-white" />
-                    <div className="border-r border-b border-white" />
-                    <div className="border-b border-white" />
-                    <div className="border-r border-b border-white" />
-                    <div className="border-r border-b border-white" />
-                    <div className="border-b border-white" />
-                    <div className="border-r border-b border-white" />
-                    <div className="border-r border-b border-white" />
-                    <div />
-                  </div>
-                )}
-
-                {/* Central Photogrammetry Reticle */}
-                {showCrosshair && (
-                  <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
-                    <div className={`relative w-80 h-80 border-2 border-dashed rounded-3xl flex items-center justify-center transition-colors ${
-                      isAutoTurntable ? 'border-amber-400/80 bg-black/40' : 'border-cyan-400/50'
-                    }`}>
-                      <div className="w-6 h-0.5 bg-cyan-400/70" />
-                      <div className="h-6 w-0.5 bg-cyan-400/70 absolute" />
-
-                      {/* Turntable Auto Countdown Center */}
-                      {isAutoTurntable && (
-                        <div className="flex flex-col items-center justify-center bg-black/85 backdrop-blur-md rounded-2xl px-5 py-3 border border-amber-400/60 shadow-2xl animate-in zoom-in-95">
-                          <Disc className="w-6 h-6 text-amber-400 animate-spin mb-1" />
-                          <span className="text-4xl font-black font-mono text-amber-400">
-                            {autoCountdown !== null && autoCountdown > 0 ? autoCountdown : '📸'}
-                          </span>
-                          <span className="text-[10px] font-mono text-zinc-300">
-                            {autoCountdown !== null && autoCountdown > 0
-                              ? 'Gira el objeto en la mesa...'
-                              : '¡Foto capturada!'}
-                          </span>
-                        </div>
-                      )}
-
-                      <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 bg-black/80 px-3 py-1 rounded-full border border-cyan-500/40 text-[11px] font-mono text-cyan-300 whitespace-nowrap">
-                        {isAutoTurntable ? 'Modo Auto-Giro de Objeto (Turntable)' : `Ángulo actual: ${currentGuide.label}`}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </>
+            {/* Grid Overlay */}
+            {showGrid && cameraActive && (
+              <div className="absolute inset-0 pointer-events-none grid grid-cols-3 grid-rows-3 z-10 opacity-20">
+                <div className="border-r border-b border-white" />
+                <div className="border-r border-b border-white" />
+                <div className="border-b border-white" />
+                <div className="border-r border-b border-white" />
+                <div className="border-r border-b border-white" />
+                <div className="border-b border-white" />
+                <div className="border-r border-b border-white" />
+                <div className="border-r border-b border-white" />
+                <div />
+              </div>
             )}
 
-            {/* Top Toolbar overlay on camera */}
-            <div className="absolute top-4 left-4 z-20 flex items-center gap-2">
-              {/* 4K Live Resolution Pill */}
-              <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-zinc-950/85 border border-zinc-700 text-xs font-mono text-zinc-300 shadow">
-                <span className={`w-2 h-2 rounded-full ${resolution === '4k' ? 'bg-amber-400 animate-pulse' : 'bg-cyan-400'}`} />
-                <span className={resolution === '4k' ? 'text-amber-300 font-bold' : 'text-cyan-300 font-bold'}>
-                  {resolution === '4k' ? '4K ULTRA HD (3840×2160)' : '1080p FHD'}
-                </span>
+            {/* Sleek Central CAD Crosshair */}
+            {showCrosshair && cameraActive && (
+              <div className="absolute inset-0 pointer-events-none flex items-center justify-center z-10">
+                <div className="relative w-72 h-72 sm:w-80 sm:h-80 flex items-center justify-center">
+                  {/* Outer Hairline Orbit Circle */}
+                  <svg className="absolute inset-0 w-full h-full -rotate-90">
+                    <circle
+                      cx="50%"
+                      cy="50%"
+                      r="46%"
+                      fill="none"
+                      stroke="#27272a"
+                      strokeWidth="2"
+                    />
+                    <circle
+                      cx="50%"
+                      cy="50%"
+                      r="46%"
+                      fill="none"
+                      stroke="#06b6d4"
+                      strokeWidth="3.5"
+                      strokeDasharray={`${(orbitProgress / 100) * 2.89 * 100} 1000`}
+                      className="transition-all duration-300"
+                    />
+                  </svg>
+
+                  {/* Corner CAD markers */}
+                  <div className="absolute inset-8 pointer-events-none">
+                    <div className="absolute top-0 left-0 w-5 h-5 border-t-2 border-l-2 border-cyan-400/70" />
+                    <div className="absolute top-0 right-0 w-5 h-5 border-t-2 border-r-2 border-cyan-400/70" />
+                    <div className="absolute bottom-0 left-0 w-5 h-5 border-b-2 border-l-2 border-cyan-400/70" />
+                    <div className="absolute bottom-0 right-0 w-5 h-5 border-b-2 border-r-2 border-cyan-400/70" />
+                  </div>
+
+                  {/* Subtle Center Reticle */}
+                  <div className="w-4 h-0.5 bg-cyan-400/60" />
+                  <div className="h-4 w-0.5 bg-cyan-400/60 absolute" />
+
+                  {/* Turntable Countdown Display */}
+                  {isAutoTurntable && autoCountdown !== null && (
+                    <div className="absolute z-20 flex flex-col items-center justify-center bg-zinc-950/85 backdrop-blur-md rounded-2xl px-5 py-3 border border-amber-400/50 shadow-2xl animate-in zoom-in-95">
+                      <span className="text-3xl font-black font-mono text-amber-400">
+                        {autoCountdown > 0 ? autoCountdown : '📸'}
+                      </span>
+                      <span className="text-[10px] font-mono text-zinc-300">
+                        {autoCountdown > 0 ? 'Gira el objeto...' : '¡Disparando!'}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
+            )}
 
-              {devices.length > 1 && (
-                <select
-                  value={selectedDeviceId}
-                  onChange={(e) => setSelectedDeviceId(e.target.value)}
-                  className="bg-zinc-950/80 border border-zinc-700 text-xs rounded-xl px-2.5 py-1 text-zinc-300 focus:outline-none focus:border-cyan-500"
-                >
-                  {devices.map((d, i) => (
-                    <option key={d.deviceId || i} value={d.deviceId}>
-                      {d.label || `Cámara ${i + 1}`}
-                    </option>
-                  ))}
-                </select>
-              )}
-
-              <button
-                onClick={() => setShowGrid((v) => !v)}
-                className={`p-2 rounded-xl border text-xs cursor-pointer shadow ${
-                  showGrid ? 'bg-cyan-950 border-cyan-500 text-cyan-300' : 'bg-zinc-900/80 border-zinc-700 text-zinc-400'
-                }`}
-                title="Alternar cuadrícula"
-              >
-                <Grid className="w-4 h-4" />
-              </button>
-
-              <button
-                onClick={() => setShowCrosshair((v) => !v)}
-                className={`p-2 rounded-xl border text-xs cursor-pointer shadow ${
-                  showCrosshair ? 'bg-cyan-950 border-cyan-500 text-cyan-300' : 'bg-zinc-900/80 border-zinc-700 text-zinc-400'
-                }`}
-                title="Alternar retícula central"
-              >
-                <Crosshair className="w-4 h-4" />
-              </button>
-            </div>
+            {/* UNIFIED LIVE HUD STRIP (Clean & Quiet) */}
+            {cameraActive && (
+              <div className="absolute top-3 inset-x-4 z-20 pointer-events-none flex justify-center">
+                <div className="flex items-center gap-2.5 bg-zinc-950/80 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-zinc-700/60 text-[11px] font-mono shadow-lg text-zinc-300">
+                  <span className="flex items-center gap-1 font-semibold text-cyan-300">
+                    <span className={`w-1.5 h-1.5 rounded-full ${resolution === '4k' ? 'bg-amber-400' : 'bg-cyan-400'}`} />
+                    {resolution === '4k' ? '4K UHD' : '1080p FHD'}
+                  </span>
+                  <span className="text-zinc-600">•</span>
+                  <span className="text-zinc-300">Distancia: 35-45 cm</span>
+                  <span className="text-zinc-600">•</span>
+                  <span className={isAutoTurntable ? 'text-amber-300 font-bold' : 'text-zinc-300'}>
+                    {isAutoTurntable ? 'Auto-Turntable' : 'Manual'}
+                  </span>
+                  <span className="text-zinc-600">•</span>
+                  <span className="text-cyan-400 font-bold">{photos.length}/8 tomas</span>
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* PC Bottom Shutter & Controls Dock */}
-          <div className="h-20 bg-zinc-900/95 border-t border-zinc-800 px-6 flex items-center justify-between z-20">
-            {/* Multi-file file upload button */}
+          {/* Sleek Bottom Camera Dock */}
+          <div className="h-18 bg-zinc-900 border-t border-zinc-800 px-6 flex items-center justify-between z-20 shrink-0">
+            {/* File Upload from PC */}
             <div>
               <input
                 ref={fileInputRef}
                 type="file"
                 accept="image/*"
                 multiple
-                onChange={(e) => {
-                  const files = e.target.files;
-                  if (!files) return;
-                  Array.from(files).forEach((file, idx) => {
-                    const reader = new FileReader();
-                    reader.onload = (loadEvent) => {
-                      const dataUrl = loadEvent.target?.result as string;
-                      if (dataUrl) {
-                        const img = new Image();
-                        img.onload = () => {
-                          const is4K = img.width >= 3200 || img.height >= 3200;
-                          const angleLabel = GUIDED_ANGLES[(photos.length + idx) % GUIDED_ANGLES.length].label;
-                          onAddPhoto({
-                            id: `upload-${Date.now()}-${idx}`,
-                            dataUrl,
-                            angleLabel,
-                            timestamp: Date.now(),
-                            width: img.width,
-                            height: img.height,
-                            is4K,
-                            resolutionLabel: `${img.width} × ${img.height} ${is4K ? '(4K UHD)' : '(FHD)'}`,
-                          });
-                        };
-                        img.src = dataUrl;
-                      }
-                    };
-                    reader.readAsDataURL(file);
-                  });
-                  if (fileInputRef.current) {
-                    fileInputRef.current.value = '';
-                  }
-                }}
+                onChange={handleFileUpload}
                 className="hidden"
               />
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-200 text-xs font-medium flex items-center gap-2 cursor-pointer shadow"
+                className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-750 border border-zinc-700 text-zinc-300 hover:text-white text-xs font-medium flex items-center gap-1.5 cursor-pointer transition-colors"
+                title="Subir fotos desde disco"
               >
-                <Upload className="w-4 h-4 text-cyan-400" />
-                <span>Importar Fotos de PC</span>
+                <Upload className="w-3.5 h-3.5 text-cyan-400" />
+                <span>Importar Fotos</span>
               </button>
             </div>
 
-            {/* Center Controls: Auto Turntable + Manual Shutter */}
+            {/* Center: Turntable toggle & Main Shutter */}
             <div className="flex items-center gap-3">
-              {/* Auto Turntable Toggle Button */}
               <button
                 onClick={() => {
                   triggerHaptic('medium');
@@ -655,262 +570,247 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
                   if (isAutoTurntable) setAutoCountdown(null);
                 }}
                 disabled={!cameraActive}
-                className={`px-4 py-2.5 rounded-2xl font-bold text-xs flex items-center gap-2 shadow-xl active:scale-95 transition-all cursor-pointer ${
+                className={`px-3.5 py-2 rounded-xl font-medium text-xs flex items-center gap-1.5 transition-colors cursor-pointer ${
                   isAutoTurntable
-                    ? 'bg-amber-400 text-black shadow-amber-400/30 animate-pulse'
-                    : 'bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-amber-500/40 shadow-sm'
+                    ? 'bg-amber-400 text-black font-bold'
+                    : 'bg-zinc-800 hover:bg-zinc-750 text-amber-300 border border-amber-500/30'
                 }`}
-                title="Captura automática rítmica para cuando giras el objeto en una base giratoria"
+                title="Captura automática rítmica para base giratoria"
               >
-                {isAutoTurntable ? (
-                  <>
-                    <Pause className="w-4 h-4 fill-current" />
-                    <span>Pausar Auto Giro ({autoCountdown}s)</span>
-                  </>
-                ) : (
-                  <>
-                    <Disc className="w-4 h-4 text-amber-400" />
-                    <span>Auto-Giro de Objeto (Turntable)</span>
-                  </>
-                )}
+                <Disc className={`w-3.5 h-3.5 ${isAutoTurntable ? 'animate-spin' : ''}`} />
+                <span>{isAutoTurntable ? 'Pausar Auto' : 'Modo Giratorio'}</span>
               </button>
 
-              {/* Big Shutter Trigger with [Space] badge */}
+              {/* Primary Shutter Trigger */}
               <button
                 onClick={capturePhoto}
                 disabled={!cameraActive}
-                className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-zinc-950 font-bold text-xs flex items-center gap-2 shadow-xl shadow-cyan-500/20 active:scale-95 transition-all cursor-pointer disabled:opacity-40"
+                className="px-6 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-zinc-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-cyan-500/20 active:scale-95 transition-all cursor-pointer disabled:opacity-40"
               >
-                <Camera className="w-4 h-4 text-zinc-950" />
+                <Camera className="w-4 h-4 fill-current" />
                 <span>Capturar</span>
-                <span className="text-[10px] font-mono bg-black/20 px-1.5 py-0.5 rounded text-zinc-950">
-                  ESPACIO
+                <span className="text-[10px] font-mono bg-black/20 px-1 rounded text-zinc-950">
+                  Espacio
                 </span>
               </button>
             </div>
 
-            {/* Quick status & Auto 3D setting */}
-            <div className="text-right flex flex-col items-end">
-              <label className="flex items-center gap-1.5 text-[10px] text-zinc-300 cursor-pointer select-none mb-0.5">
-                <input
-                  type="checkbox"
-                  checked={autoCreateOnFinish}
-                  onChange={(e) => setAutoCreateOnFinish(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded accent-cyan-400"
-                />
-                <span className="text-cyan-300 font-semibold">Auto-crear 3D al terminar</span>
-              </label>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-mono font-bold text-white">
-                  {photos.length}/8 Fotos
-                </span>
-                <span className="text-[10px] text-zinc-500">Ctrl+V / Arrastrar</span>
-              </div>
+            {/* Quick Helper indicator */}
+            <div className="text-right text-[11px] font-mono text-zinc-400">
+              <span>{photos.length} fotogramas</span>
             </div>
           </div>
         </div>
 
-        {/* Right Sidebar: Scan Center, Categories, Metric Preview & History */}
-        <div className="w-96 bg-zinc-900 flex flex-col overflow-y-auto p-5 space-y-5 shrink-0">
-          {/* Category Profile Selection */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                1. Perfil de Escaneo
-              </span>
-              <span className="text-[10px] text-cyan-400 font-mono">Calibración IA</span>
-            </div>
+        {/* Right: Clean Photogrammetry Workbench */}
+        <div className="w-96 bg-zinc-900 border-l border-zinc-800 flex flex-col justify-between p-5 overflow-y-auto shrink-0">
+          <div className="space-y-5">
+            {/* 1. Category Selector */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                  Categoría de Objeto
+                </span>
+                <span className="text-[10px] text-cyan-400 font-mono font-medium">
+                  {activeCategoryObj.label}
+                </span>
+              </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              {CATEGORIES.map((cat) => (
-                <button
-                  key={cat.id}
-                  onClick={() => {
-                    triggerHaptic('light');
-                    onChangeCategory(cat.id);
-                  }}
-                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                    selectedCategory === cat.id
-                      ? 'bg-cyan-950/80 border-cyan-500 text-white shadow-md'
-                      : 'bg-zinc-950/60 border-zinc-800 text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5 text-xs font-bold mb-0.5">
-                    <span>{cat.icon}</span>
-                    <span>{cat.label}</span>
-                  </div>
-                  <p className="text-[10px] text-zinc-500 leading-tight line-clamp-2">{cat.desc}</p>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Object Name / Hint Input */}
-          <div>
-            <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 block mb-1.5">
-              2. Nombre o Pista del Objeto
-            </span>
-            <input
-              type="text"
-              value={objectHint}
-              onChange={(e) => setObjectHint(e.target.value)}
-              placeholder="Ej: Soporte de motor, Cavidad cilíndrica, Engranaje..."
-              className="w-full bg-zinc-950 border border-zinc-700 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-cyan-500 transition-colors"
-            />
-          </div>
-
-          {/* 360 Photogrammetry Angle Checklist */}
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
-                3. Cobertura Orbital ({photos.length} / 8 tomas)
-              </span>
-              {photos.length > 0 && (
-                <button
-                  onClick={onClearPhotos}
-                  className="text-[11px] text-red-400 hover:text-red-300 cursor-pointer"
-                >
-                  Borrar todas
-                </button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-3 gap-1.5">
-              {GUIDED_ANGLES.map((ang, i) => {
-                const isCaptured = i < photos.length;
-                return (
-                  <div
-                    key={ang.id}
-                    className={`p-2 rounded-xl border text-center transition-all ${
-                      isCaptured
-                        ? 'bg-emerald-950/50 border-emerald-500/50 text-emerald-300'
-                        : 'bg-zinc-950/60 border-zinc-800 text-zinc-500'
+              {/* Clean horizontal pill segmented control */}
+              <div className="flex flex-wrap gap-1.5">
+                {CATEGORIES.map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => {
+                      triggerHaptic('light');
+                      onChangeCategory(cat.id);
+                    }}
+                    className={`px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all flex items-center gap-1 cursor-pointer ${
+                      selectedCategory === cat.id
+                        ? 'bg-cyan-500 text-zinc-950 font-bold shadow-sm'
+                        : 'bg-zinc-950 border border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
                     }`}
                   >
-                    <span className="text-[10px] font-mono block font-bold">{ang.label.split(' ')[0]}</span>
-                    <span className="text-[9px] block text-zinc-500">{isCaptured ? '✓ Lista' : 'Pendiente'}</span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Captured Photos Reel */}
-          {photos.length > 0 && (
-            <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 block mb-2">
-                Fotogramas Capturados ({photos.length})
-              </span>
-              <div className="grid grid-cols-4 gap-2 max-h-36 overflow-y-auto pr-1">
-                {photos.map((p, idx) => (
-                  <div
-                    key={p.id}
-                    className="relative group rounded-lg overflow-hidden border border-zinc-700 aspect-square bg-black cursor-pointer"
-                    onClick={() => setPreviewPhoto(p)}
-                  >
-                    <img src={p.dataUrl} alt={`Foto ${idx}`} className="w-full h-full object-cover" />
-                    {p.is4K && (
-                      <span className="absolute top-1 left-1 bg-amber-400 text-black text-[7px] font-black px-1 rounded shadow">
-                        4K
-                      </span>
-                    )}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRemovePhoto(p.id);
-                      }}
-                      className="absolute top-1 right-1 p-0.5 rounded bg-red-600/80 text-white opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                    <span className="absolute bottom-0.5 left-1 text-[8px] font-mono bg-black/70 px-1 rounded text-white">
-                      #{idx + 1}
-                    </span>
-                  </div>
+                    <span>{cat.icon}</span>
+                    <span>{cat.label}</span>
+                  </button>
                 ))}
               </div>
             </div>
-          )}
 
-          {/* Big Action: Reconstruct 3D Model */}
-          <div className="pt-2">
+            {/* 2. Object Hint / Name */}
+            <div>
+              <span className="text-xs font-bold uppercase tracking-wider text-zinc-400 block mb-1.5">
+                Nombre o Pistas (Opcional)
+              </span>
+              <input
+                type="text"
+                value={objectHint}
+                onChange={(e) => setObjectHint(e.target.value)}
+                placeholder="Ej: Cilindro con hoyos, Carcasa, Botella..."
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-cyan-500 transition-colors"
+              />
+            </div>
+
+            {/* 3. Captured Photos Reel */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold uppercase tracking-wider text-zinc-400">
+                  Fotos Capturadas ({photos.length})
+                </span>
+                {photos.length > 0 && (
+                  <button
+                    onClick={onClearPhotos}
+                    className="text-[11px] text-red-400 hover:text-red-300 cursor-pointer"
+                  >
+                    Limpiar
+                  </button>
+                )}
+              </div>
+
+              {photos.length > 0 ? (
+                <div className="grid grid-cols-4 gap-2 max-h-48 overflow-y-auto pr-1">
+                  {photos.map((p, idx) => (
+                    <div
+                      key={p.id}
+                      className="relative group rounded-lg overflow-hidden border border-zinc-800 aspect-square bg-black cursor-pointer hover:border-cyan-500 transition-colors"
+                      onClick={() => setPreviewPhoto(p)}
+                    >
+                      <img src={p.dataUrl} alt={`Foto ${idx}`} className="w-full h-full object-cover" />
+                      {p.is4K && (
+                        <span className="absolute top-1 left-1 bg-amber-400 text-black text-[7px] font-black px-1 rounded shadow">
+                          4K
+                        </span>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onRemovePhoto(p.id);
+                        }}
+                        className="absolute top-1 right-1 p-0.5 rounded bg-red-600 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                        title="Eliminar foto"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                      <span className="absolute bottom-0.5 left-1 text-[8px] font-mono bg-black/70 px-1 rounded text-zinc-300">
+                        #{idx + 1}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-5 rounded-2xl bg-zinc-950/60 border border-dashed border-zinc-800 text-center">
+                  <Camera className="w-6 h-6 text-zinc-600 mx-auto mb-1.5" />
+                  <p className="text-xs text-zinc-400 font-medium">No hay fotos capturadas</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">
+                    Presiona el botón Capturar o Espacio para tomar fotogramas del objeto.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Bottom Actions: Big Reconstruct Button */}
+          <div className="pt-4 border-t border-zinc-800 space-y-2">
             <button
               onClick={() => onStartReconstruction(objectHint)}
               disabled={photos.length === 0}
               className={`w-full py-3.5 px-4 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-xl cursor-pointer ${
                 photos.length > 0
-                  ? 'bg-gradient-to-r from-cyan-500 via-blue-600 to-indigo-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-cyan-500/30'
-                  : 'bg-zinc-800 text-zinc-500 border border-zinc-700/50 cursor-not-allowed'
+                  ? 'bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white shadow-cyan-500/25 active:scale-98'
+                  : 'bg-zinc-800 text-zinc-500 border border-zinc-750 cursor-not-allowed opacity-50'
               }`}
             >
               <Sparkles className="w-4 h-4" />
-              <span>Generar Modelo 3D con IA [Enter]</span>
+              <span>
+                {photos.length > 0
+                  ? `Generar Modelo 3D (${photos.length} fotos)`
+                  : 'Toma fotos para generar 3D'}
+              </span>
             </button>
-            <p className="text-[10px] text-zinc-500 text-center mt-2">
-              Se creará la malla tridimensional con cálculo métrico en mm y exportación a OBJ / STL.
-            </p>
-          </div>
 
-          {/* Quick Presets for PC testing */}
-          <div className="pt-2 border-t border-zinc-800">
-            <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider block mb-2">
-              Modelos de Prueba Instantáneos
-            </span>
-            <div className="space-y-1.5">
-              {SAMPLE_MODELS.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => onSelectSample(item.id)}
-                  className="w-full p-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-left flex items-center justify-between text-xs transition-colors cursor-pointer"
-                >
-                  <div>
-                    <span className="font-semibold text-zinc-200 block">{item.name}</span>
-                    <span className="text-[10px] text-zinc-500 capitalize">{item.scanCategory} • Medidas en mm</span>
-                  </div>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-800 text-cyan-300">
-                    Cargar 3D
-                  </span>
-                </button>
-              ))}
+            {/* Subtle Samples Trigger */}
+            <div className="text-center pt-1">
+              <button
+                onClick={() => setShowSampleModal(true)}
+                className="text-[11px] text-zinc-400 hover:text-cyan-300 transition-colors cursor-pointer underline underline-offset-2"
+              >
+                ¿Quieres probar con un modelo de muestra?
+              </button>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Interactive Tutorial Modal */}
+      {/* Interactive Step-by-Step Tutorial Modal */}
       <InteractiveTutorial
         isOpen={showTutorial}
         onClose={() => setShowTutorial(false)}
         onStartScanning={() => setShowTutorial(false)}
       />
 
-      {/* Photo Preview Modal */}
-      {previewPhoto && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md select-none">
-          <div className="relative w-full max-w-lg bg-zinc-900 border border-zinc-700 rounded-3xl overflow-hidden shadow-2xl">
-            <div className="flex items-center justify-between p-4 border-b border-zinc-800">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-bold text-zinc-300">{previewPhoto.angleLabel}</span>
-                {previewPhoto.is4K ? (
-                  <span className="text-[9px] font-mono font-bold bg-amber-400 text-black px-2 py-0.5 rounded-full shadow">
-                    4K ULTRA HD
-                  </span>
-                ) : (
-                  <span className="text-[9px] font-mono bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded-full border border-zinc-700">
-                    FHD 1080p
-                  </span>
-                )}
-              </div>
-              <button onClick={() => setPreviewPhoto(null)} className="p-1 rounded-lg text-zinc-400 hover:text-white">
+      {/* Sample Models Modal */}
+      {showSampleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm select-none">
+          <div className="relative w-full max-w-sm bg-zinc-900 border border-zinc-700 rounded-3xl p-5 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-zinc-800 mb-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Play className="w-4 h-4 text-cyan-400" />
+                Modelos 3D de Muestra
+              </h3>
+              <button
+                onClick={() => setShowSampleModal(false)}
+                className="p-1 rounded-full text-zinc-400 hover:text-white"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-3 bg-black flex items-center justify-center max-h-[60vh]">
-              <img src={previewPhoto.dataUrl} alt="Foto" className="max-h-[55vh] object-contain rounded-xl" />
+
+            <div className="space-y-2">
+              {SAMPLE_MODELS.map((item) => (
+                <div
+                  key={item.id}
+                  onClick={() => {
+                    onSelectSample(item.id);
+                    setShowSampleModal(false);
+                  }}
+                  className="p-3 rounded-2xl bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 flex items-center justify-between cursor-pointer transition-colors"
+                >
+                  <div>
+                    <h4 className="text-xs font-bold text-zinc-200">{item.name}</h4>
+                    <p className="text-[10px] text-zinc-400">
+                      {item.measurements?.widthMm}×{item.measurements?.heightMm}×{item.measurements?.depthMm} mm
+                    </p>
+                  </div>
+                  <span className="text-[10px] font-mono px-2 py-1 rounded-lg bg-zinc-800 text-cyan-300 border border-zinc-700">
+                    Cargar
+                  </span>
+                </div>
+              ))}
             </div>
-            <div className="px-4 py-2 bg-zinc-950 border-t border-zinc-800 text-[11px] text-zinc-400 font-mono flex items-center justify-between">
-              <span>Resolución: {previewPhoto.resolutionLabel || `${previewPhoto.width || 1920} × ${previewPhoto.height || 1080}`}</span>
-              <span className="text-cyan-400 font-semibold">Sensor Fotogramétrico Óptimo</span>
+          </div>
+        </div>
+      )}
+
+      {/* Photo Preview Modal */}
+      {previewPhoto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md select-none">
+          <div className="relative w-full max-w-sm bg-zinc-900 border border-zinc-700 rounded-3xl overflow-hidden shadow-2xl">
+            <div className="flex items-center justify-between p-3 border-b border-zinc-800">
+              <span className="text-xs font-bold text-zinc-300">{previewPhoto.angleLabel}</span>
+              <button
+                onClick={() => setPreviewPhoto(null)}
+                className="p-1 rounded-lg text-zinc-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-2 bg-black flex items-center justify-center max-h-[50vh]">
+              <img
+                src={previewPhoto.dataUrl}
+                alt="Foto"
+                className="max-h-[46vh] object-contain rounded-xl"
+              />
             </div>
             <div className="p-3 flex justify-between gap-2 bg-zinc-900">
               <button
@@ -918,87 +818,16 @@ export const DesktopStudio: React.FC<DesktopStudioProps> = ({
                   onRemovePhoto(previewPhoto.id);
                   setPreviewPhoto(null);
                 }}
-                className="px-3 py-1.5 rounded-xl bg-red-600/20 text-red-400 border border-red-500/30 text-xs font-medium flex items-center gap-1.5"
+                className="px-3 py-1.5 rounded-xl bg-red-600/20 text-red-400 border border-red-500/30 text-xs font-medium flex items-center gap-1.5 cursor-pointer"
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 Eliminar
               </button>
               <button
                 onClick={() => setPreviewPhoto(null)}
-                className="px-4 py-1.5 rounded-xl bg-zinc-800 text-zinc-200 text-xs font-medium"
+                className="px-4 py-1.5 rounded-xl bg-zinc-800 text-zinc-200 text-xs font-medium cursor-pointer"
               >
-                Volver
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Auto-Completion 360 & Instant Model Generation Modal */}
-      {showAutoCompletionModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md select-none animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md bg-gradient-to-b from-zinc-900 to-zinc-950 border border-amber-500/40 rounded-3xl p-6 shadow-2xl text-center">
-            {/* Top Badge */}
-            <div className="w-16 h-16 mx-auto rounded-3xl bg-gradient-to-tr from-amber-400 to-yellow-500 flex items-center justify-center text-zinc-950 shadow-xl shadow-amber-400/30 mb-4 animate-bounce">
-              <Sparkles className="w-8 h-8" />
-            </div>
-
-            <span className="text-[10px] font-mono font-bold tracking-widest uppercase text-amber-400 block mb-1">
-              Escaneo Orbital 100% Completo
-            </span>
-            <h3 className="text-xl font-black text-white mb-2">
-              ¡Giro 360° Completado!
-            </h3>
-            <p className="text-xs text-zinc-300 mb-5 leading-relaxed">
-              Has capturado los <strong className="text-white">8 ángulos orbitales</strong> en{' '}
-              <strong className="text-amber-300">{resolution === '4k' ? '4K Ultra HD' : '1080p'}</strong> con tu cámara web. La geometría está lista para ser triangulada.
-            </p>
-
-            {/* Auto-Launch Countdown Indicator */}
-            {autoCreateOnFinish && (
-              <div className="mb-5 p-3.5 rounded-2xl bg-amber-950/40 border border-amber-500/30 flex items-center justify-between">
-                <div className="flex items-center gap-3 text-left">
-                  <div className="w-9 h-9 rounded-xl bg-amber-400 text-black font-black font-mono text-base flex items-center justify-center shrink-0">
-                    {autoLaunchSeconds}s
-                  </div>
-                  <div>
-                    <span className="text-xs font-bold text-amber-300 block">Generación Automática</span>
-                    <span className="text-[10px] text-zinc-400">Creando modelo 3D con IA...</span>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setShowAutoCompletionModal(false);
-                    triggerHaptic('light');
-                  }}
-                  className="text-xs text-zinc-300 hover:text-white px-3 py-1.5 rounded-xl bg-zinc-800"
-                >
-                  Pausar
-                </button>
-              </div>
-            )}
-
-            <div className="flex flex-col gap-2.5">
-              <button
-                onClick={() => {
-                  setShowAutoCompletionModal(false);
-                  triggerHaptic('success');
-                  onStartReconstruction(objectHint);
-                }}
-                className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 hover:from-amber-300 hover:to-yellow-300 text-zinc-950 font-black text-xs flex items-center justify-center gap-2 shadow-xl shadow-amber-400/25 active:scale-95 transition-all cursor-pointer"
-              >
-                <Sparkles className="w-4 h-4 fill-current" />
-                <span>Crear Modelo 3D Ahora [Enter]</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setShowAutoCompletionModal(false);
-                  triggerHaptic('light');
-                }}
-                className="w-full py-2.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 font-medium text-xs cursor-pointer"
-              >
-                Continuar Escaneando Más Tomas
+                Cerrar
               </button>
             </div>
           </div>

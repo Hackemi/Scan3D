@@ -2,6 +2,101 @@ import { Model3DData } from '../types';
 
 export const SAMPLE_MODELS: Model3DData[] = [
   {
+    id: 'sample-cylinder-holes',
+    name: 'Cilindro Perforado con Hoyos (Buje CAD)',
+    category: 'hoyo',
+    scanCategory: 'hoyo',
+    description: 'Cilindro hueco de ingeniería con barreno pasante central, 4 orificios de lubricación transversales y chaflanes en los extremos.',
+    dimensions: { width: 8.0, height: 12.0, depth: 8.0 },
+    measurements: {
+      widthMm: 80,
+      heightMm: 120,
+      depthMm: 80,
+      diameterMm: 80,
+      internalDepthMm: 120,
+      volumeCm3: 215,
+      wallThicknessMm: 6.5,
+      toleranceMm: 0.1,
+      holeDiameterMm: 22,
+      holeCount: 5,
+    },
+    materialStyle: {
+      dominantColor: '#2563eb', // Azul anodizado
+      accentColor: '#f59e0b', // Ámbar de advertencia
+      secondaryColor: '#ef4444', // Rojo de orificio
+      metalness: 0.35,
+      roughness: 0.28,
+      surfaceFinish: 'metallic',
+    },
+    components: [
+      {
+        name: 'cuerpo_cilindro_tubo',
+        shapeType: 'tube',
+        position: [0, 1.2, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+        parameters: { radius: 1.4, innerRadius: 0.85, height: 2.4, radialSegments: 36 },
+        material: { color: '#2563eb', roughness: 0.3, metalness: 0.4 }
+      },
+      {
+        name: 'cavidad_interior_profunda',
+        shapeType: 'cylinder',
+        position: [0, 1.2, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+        parameters: { radiusTop: 0.82, radiusBottom: 0.82, height: 2.38, radialSegments: 32 },
+        material: { color: '#090d16', roughness: 0.8, metalness: 0.1 }
+      },
+      {
+        name: 'hoyo_transversal_x',
+        shapeType: 'cylinder',
+        position: [0, 1.2, 0],
+        rotation: [0, 0, Math.PI / 2],
+        scale: [1, 1, 1],
+        parameters: { radiusTop: 0.35, radiusBottom: 0.35, height: 3.0, radialSegments: 24 },
+        material: { color: '#ef4444', roughness: 0.25, metalness: 0.6 }
+      },
+      {
+        name: 'hoyo_transversal_z',
+        shapeType: 'cylinder',
+        position: [0, 1.7, 0],
+        rotation: [Math.PI / 2, 0, 0],
+        scale: [1, 1, 1],
+        parameters: { radiusTop: 0.28, radiusBottom: 0.28, height: 3.0, radialSegments: 24 },
+        material: { color: '#f59e0b', roughness: 0.25, metalness: 0.6 }
+      },
+      {
+        name: 'chaflan_boca_superior',
+        shapeType: 'torus',
+        position: [0, 2.4, 0],
+        rotation: [Math.PI / 2, 0, 0],
+        scale: [1, 1, 1],
+        parameters: { radius: 1.15, tube: 0.08, radialSegments: 16, tubularSegments: 36 },
+        material: { color: '#10b981', roughness: 0.2, metalness: 0.5 }
+      },
+      {
+        name: 'chaflan_boca_inferior',
+        shapeType: 'torus',
+        position: [0, 0.02, 0],
+        rotation: [Math.PI / 2, 0, 0],
+        scale: [1, 1, 1],
+        parameters: { radius: 1.15, tube: 0.08, radialSegments: 16, tubularSegments: 36 },
+        material: { color: '#06b6d4', roughness: 0.2, metalness: 0.5 }
+      }
+    ],
+    qualityScore: 99,
+    detectedFeatures: [
+      'Cilindro hueco con espesor de pared de 6.5 mm',
+      'Orificio pasante central Ø 44 mm con fondo calibrado',
+      '2 orificios transversales pasantes a 90° (Ø 22 mm y Ø 18 mm)',
+      'Chaflanes de entrada superior e inferior a 45°',
+      'Colores diferenciados por elemento funcional'
+    ],
+    createdAt: new Date().toISOString(),
+    source: 'sample-preset',
+    photosCount: 10,
+  },
+  {
     id: 'sample-bracket-3d',
     name: 'Soporte Mecánico 3D (Pieza CAD)',
     category: 'pieza_3d',

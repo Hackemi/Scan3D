@@ -25,10 +25,16 @@ import {
   Layers,
   CheckCircle2,
   ArrowDownToLine,
+  Wrench,
+  Scissors,
+  Palette,
 } from 'lucide-react';
 import { exportToOBJ, exportToSTL, exportToPLY, exportToJSON } from '../utils/exporters';
 import { soundEffects } from '../utils/audio';
 import { triggerHaptic } from '../utils/haptics';
+import { ModelEditorDrawer, CONTRAST_PALETTE } from './ModelEditorDrawer';
+import { PhotoCompareModal } from './PhotoCompareModal';
+import { ComponentDefinition, ShapeType, ClipPlaneConfig } from '../types';
 
 interface Viewport3DProps {
   modelData: Model3DData;
@@ -49,6 +55,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const modelGroupRef = useRef<THREE.Group | null>(null);
   const pointCloudMeshRef = useRef<THREE.Points | null>(null);
   const boxHelperRef = useRef<THREE.BoxHelper | null>(null);
+  const planeHelperRef = useRef<THREE.PlaneHelper | null>(null);
 
   const [controlsCollapsed, setControlsCollapsed] = useState<boolean>(false);
   const [renderMode, setRenderMode] = useState<RenderMode>('textured');
@@ -57,6 +64,56 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const [explodedFactor, setExplodedFactor] = useState<number>(0);
   const [showDimensions, setShowDimensions] = useState<boolean>(false);
   const [sharedToast, setSharedToast] = useState<boolean>(false);
+
+  // 3D Model Modifications & Editing Suite
+  const [workingComponents, setWorkingComponents] = useState<ComponentDefinition[]>(modelData.components || []);
+  const [historyStack, setHistoryStack] = useState<ComponentDefinition[][]>([]);
+  const [selectedCompIdx, setSelectedCompIdx] = useState<number | null>(null);
+  const [showEditorDrawer, setShowEditorDrawer] = useState<boolean>(false);
+  const [showPhotoCompare, setShowPhotoCompare] = useState<boolean>(false);
+
+  // Photo texture generated from user photos
+  const [photoTexture, setPhotoTexture] = useState<THREE.Texture | null>(null);
+
+  useEffect(() => {
+    if (modelData.textureUrl) {
+      const loader = new THREE.TextureLoader();
+      loader.load(modelData.textureUrl, (tex) => {
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.ClampToEdgeWrapping;
+        tex.colorSpace = THREE.SRGBColorSpace;
+        setPhotoTexture(tex);
+      });
+    }
+  }, [modelData.textureUrl]);
+
+  // Align camera angle for photo comparison (especially zenith looking into holes)
+  const handleAlignCameraAngle = (angleType: 'front' | 'top' | 'side' | 'isometric') => {
+    if (!cameraRef.current || !controlsRef.current) return;
+    if (angleType === 'top') {
+      cameraRef.current.position.set(0, 5.5, 0.01);
+      controlsRef.current.target.set(0, 1.0, 0);
+    } else if (angleType === 'front') {
+      cameraRef.current.position.set(0, 1.4, 4.5);
+      controlsRef.current.target.set(0, 1.0, 0);
+    } else if (angleType === 'side') {
+      cameraRef.current.position.set(4.5, 1.4, 0);
+      controlsRef.current.target.set(0, 1.0, 0);
+    } else {
+      cameraRef.current.position.set(3.2, 2.8, 4.8);
+      controlsRef.current.target.set(0, 1.1, 0);
+    }
+    controlsRef.current.update();
+    triggerHaptic('light');
+  };
+
+  // Clipping Plane Config (Cortar)
+  const [clipConfig, setClipConfig] = useState<ClipPlaneConfig>({
+    enabled: false,
+    axis: 'y',
+    position: 1.2,
+    inverted: false,
+  });
 
   // Export Menu and Loading State
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
@@ -67,6 +124,12 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
   const [exportedFileName, setExportedFileName] = useState<string>('');
 
   const originalPositionsRef = useRef<Map<THREE.Object3D, THREE.Vector3>>(new Map());
+
+  // Sync working components when modelData changes
+  useEffect(() => {
+    setWorkingComponents(modelData.components || []);
+    setHistoryStack([]);
+  }, [modelData]);
 
   // Software WebGL detection
   const isSoftwareGl = useRef<boolean>(
@@ -112,6 +175,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     renderer.toneMappingExposure = 1.15;
     renderer.shadowMap.enabled = !isSoftwareGl;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.localClippingEnabled = true;
 
     container.appendChild(renderer.domElement);
 
@@ -229,7 +293,200 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     };
   }, []);
 
-  // Build Procedural 3D Mesh Group from Model Data
+  // History and component modification helpers
+  const pushHistory = (newComps: ComponentDefinition[]) => {
+    setHistoryStack((prev) => [...prev.slice(-15), workingComponents]);
+    setWorkingComponents(newComps);
+  };
+
+  const handleUndo = () => {
+    if (historyStack.length === 0) return;
+    const prev = historyStack[historyStack.length - 1];
+    setHistoryStack((h) => h.slice(0, -1));
+    setWorkingComponents(prev);
+    soundEffects.playBlip();
+    triggerHaptic('light');
+  };
+
+  const handleResetOriginal = () => {
+    pushHistory(modelData.components);
+    setWorkingComponents(modelData.components);
+    setSelectedCompIdx(null);
+    setClipConfig({ enabled: false, axis: 'y', position: 1.2, inverted: false });
+    soundEffects.playSuccess();
+    triggerHaptic('medium');
+  };
+
+  const handleUpdateComponent = (idx: number, updated: ComponentDefinition) => {
+    const next = [...workingComponents];
+    next[idx] = updated;
+    pushHistory(next);
+  };
+
+  const handleDeleteComponent = (idx: number) => {
+    const next = workingComponents.filter((_, i) => i !== idx);
+    pushHistory(next);
+    setSelectedCompIdx(null);
+  };
+
+  const handleToggleVisibility = (idx: number) => {
+    const next = [...workingComponents];
+    const isVis = next[idx].visible !== false;
+    next[idx] = { ...next[idx], visible: !isVis };
+    pushHistory(next);
+  };
+
+  const handleAddComponent = (
+    type: ShapeType,
+    variantName?: string,
+    customDef?: Partial<ComponentDefinition>
+  ) => {
+    const id = workingComponents.length + 1;
+    const name = variantName || `${type}_${id}`;
+    const color = CONTRAST_PALETTE[id % CONTRAST_PALETTE.length];
+
+    let newComp: ComponentDefinition;
+    if (customDef) {
+      newComp = {
+        name,
+        shapeType: type,
+        position: customDef.position || [0, 1.2, 0],
+        rotation: customDef.rotation || [0, 0, 0],
+        scale: customDef.scale || [1, 1, 1],
+        parameters: customDef.parameters || {},
+        material: customDef.material || { color, roughness: 0.3, metalness: 0.4 },
+      };
+    } else if (type === 'tube') {
+      newComp = {
+        name,
+        shapeType: 'tube',
+        position: [0, 1.2, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+        parameters: { radius: 1.2, innerRadius: 0.7, height: 1.8, radialSegments: 48 },
+        material: { color, roughness: 0.35, metalness: 0.2 },
+      };
+    } else if (type === 'cylinder' && variantName?.includes('taladro')) {
+      newComp = {
+        name,
+        shapeType: 'cylinder',
+        position: [0, 1.2, 0],
+        rotation: [0, 0, Math.PI / 2],
+        scale: [1, 1, 1],
+        parameters: { radiusTop: 0.32, radiusBottom: 0.32, height: 2.8, radialSegments: 36 },
+        material: { color: '#ef4444', roughness: 0.25, metalness: 0.6 },
+      };
+    } else if (type === 'box') {
+      newComp = {
+        name,
+        shapeType: 'box',
+        position: [0, 0.4, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+        parameters: { width: 1.4, height: 0.8, depth: 1.4 },
+        material: { color, roughness: 0.4, metalness: 0.2 },
+      };
+    } else if (type === 'sphere') {
+      newComp = {
+        name,
+        shapeType: 'sphere',
+        position: [0, 1.8, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+        parameters: { radius: 0.6, radialSegments: 36 },
+        material: { color, roughness: 0.2, metalness: 0.4 },
+      };
+    } else if (type === 'torus') {
+      newComp = {
+        name,
+        shapeType: 'torus',
+        position: [0, 2.0, 0],
+        rotation: [Math.PI / 2, 0, 0],
+        scale: [1, 1, 1],
+        parameters: { radius: 0.9, tube: 0.08, radialSegments: 20, tubularSegments: 48 },
+        material: { color, roughness: 0.2, metalness: 0.5 },
+      };
+    } else {
+      newComp = {
+        name,
+        shapeType: 'cylinder',
+        position: [0, 1.0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+        parameters: { radiusTop: 0.7, radiusBottom: 0.7, height: 1.5, radialSegments: 48 },
+        material: { color, roughness: 0.35, metalness: 0.3 },
+      };
+    }
+
+    pushHistory([...workingComponents, newComp]);
+    setSelectedCompIdx(workingComponents.length);
+  };
+
+  const handleDuplicateComponent = (idx: number) => {
+    if (idx < 0 || idx >= workingComponents.length) return;
+    const target = workingComponents[idx];
+    const clone: ComponentDefinition = {
+      ...target,
+      name: `${target.name}_copia`,
+      position: [target.position[0] + 0.1, target.position[1] + 0.15, target.position[2] + 0.1],
+      rotation: [...target.rotation],
+      scale: [...target.scale],
+      parameters: target.parameters ? { ...target.parameters } : undefined,
+      material: { ...target.material },
+    };
+    pushHistory([...workingComponents, clone]);
+    setSelectedCompIdx(workingComponents.length);
+    triggerHaptic('success');
+    soundEffects.playBlip();
+  };
+
+  const handleTrimNoise = () => {
+    const filtered = workingComponents.filter((c) => {
+      const isFloorSpurious = c.position[1] < 0.05 && c.shapeType !== 'lathe' && c.shapeType !== 'cylinder';
+      return !isFloorSpurious;
+    });
+    pushHistory(filtered.length > 0 ? filtered : workingComponents);
+  };
+
+  const handleApplyPermanentSlice = () => {
+    const { axis, position, inverted } = clipConfig;
+    const axisIdx = axis === 'x' ? 0 : axis === 'y' ? 1 : 2;
+
+    const modified = workingComponents.map((c) => {
+      const posVal = c.position[axisIdx];
+      const shouldKeep = inverted ? posVal <= position : posVal >= position;
+      if (!shouldKeep) {
+        return { ...c, visible: false };
+      }
+      return c;
+    });
+
+    pushHistory(modified);
+    setClipConfig((prev) => ({ ...prev, enabled: false }));
+  };
+
+  // Helper to colorize vertices with elevation heatmap (Blue = deep cavity/hole -> Red = top surface)
+  const applyElevationGradient = (geometry: THREE.BufferGeometry, bbox: THREE.Box3) => {
+    const posAttr = geometry.getAttribute('position');
+    if (!posAttr) return;
+    const colors = new Float32Array(posAttr.count * 3);
+    const minY = bbox.min.y;
+    const maxY = bbox.max.y;
+    const rangeY = Math.max(0.1, maxY - minY);
+    const col = new THREE.Color();
+
+    for (let i = 0; i < posAttr.count; i++) {
+      const y = posAttr.getY(i);
+      const norm = Math.max(0, Math.min(1, (y - minY) / rangeY));
+      col.setHSL((1.0 - norm) * 0.66, 1.0, 0.5);
+      colors[i * 3] = col.r;
+      colors[i * 3 + 1] = col.g;
+      colors[i * 3 + 2] = col.b;
+    }
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  };
+
+  // Build Procedural 3D Mesh Group from Working Components
   useEffect(() => {
     const scene = sceneRef.current;
     if (!scene) return;
@@ -249,6 +506,12 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       });
     }
 
+    if (planeHelperRef.current) {
+      scene.remove(planeHelperRef.current);
+      planeHelperRef.current.dispose();
+      planeHelperRef.current = null;
+    }
+
     if (pointCloudMeshRef.current) {
       scene.remove(pointCloudMeshRef.current);
       pointCloudMeshRef.current.geometry.dispose();
@@ -264,14 +527,56 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
     originalPositionsRef.current.clear();
 
+    // Determine active clipping plane for slicing
+    let clipPlane: THREE.Plane | null = null;
+    if (clipConfig.enabled) {
+      let normal = new THREE.Vector3(0, 1, 0);
+      if (clipConfig.axis === 'x') {
+        normal = new THREE.Vector3(clipConfig.inverted ? 1 : -1, 0, 0);
+      } else if (clipConfig.axis === 'y') {
+        normal = new THREE.Vector3(0, clipConfig.inverted ? 1 : -1, 0);
+      } else if (clipConfig.axis === 'z') {
+        normal = new THREE.Vector3(0, 0, clipConfig.inverted ? 1 : -1);
+      }
+      clipPlane = new THREE.Plane(normal, clipConfig.position);
+
+      const helper = new THREE.PlaneHelper(clipPlane, 4.0, 0xef4444);
+      scene.add(helper);
+      planeHelperRef.current = helper;
+    }
+
     const mainGroup = new THREE.Group();
     mainGroup.name = 'ModelRoot';
 
-    modelData.components.forEach((comp) => {
+    workingComponents.forEach((comp, idx) => {
+      if (comp.visible === false) return;
+
       let geo: THREE.BufferGeometry | null = null;
       const p = comp.parameters || {};
 
       switch (comp.shapeType) {
+        case 'tube': {
+          const outerR = p.radius ?? p.radiusTop ?? 1.4;
+          const innerR = p.innerRadius ?? outerR * 0.62;
+          const h = p.height ?? 2.0;
+          const shape = new THREE.Shape();
+          shape.absarc(0, 0, outerR, 0, Math.PI * 2, false);
+          const hole = new THREE.Path();
+          hole.absarc(0, 0, innerR, 0, Math.PI * 2, true);
+          shape.holes.push(hole);
+          geo = new THREE.ExtrudeGeometry(shape, {
+            depth: h,
+            bevelEnabled: true,
+            bevelSegments: 2,
+            steps: 1,
+            bevelSize: 0.03,
+            bevelThickness: 0.03,
+            curveSegments: 36,
+          });
+          geo.center();
+          geo.rotateX(-Math.PI / 2);
+          break;
+        }
         case 'lathe': {
           if (comp.lathePoints && comp.lathePoints.length > 2) {
             const v2Points = comp.lathePoints.map(([r, y]) => new THREE.Vector2(r, y));
@@ -331,7 +636,14 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
 
       if (!geo) return;
 
-      const mat = createMaterialForMode(comp.material, renderMode);
+      if (renderMode === 'elevation') {
+        geo.computeBoundingBox();
+        if (geo.boundingBox) {
+          applyElevationGradient(geo, geo.boundingBox);
+        }
+      }
+
+      const mat = createMaterialForMode(comp.material, renderMode, idx, clipPlane);
       const mesh = new THREE.Mesh(geo, mat);
       mesh.name = comp.name;
       mesh.position.set(...comp.position);
@@ -339,6 +651,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       mesh.scale.set(...comp.scale);
       mesh.castShadow = !isSoftwareGl;
       mesh.receiveShadow = !isSoftwareGl;
+      mesh.visible = renderMode !== 'pointcloud';
 
       originalPositionsRef.current.set(mesh, mesh.position.clone());
       mainGroup.add(mesh);
@@ -356,7 +669,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     scene.add(mainGroup);
     modelGroupRef.current = mainGroup;
 
-    // Point Cloud
+    // Point Cloud Mesh
     const pointsList = modelData.pointCloudSamples || [];
     if (pointsList.length > 0) {
       const pGeo = new THREE.BufferGeometry();
@@ -378,7 +691,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
       pGeo.setAttribute('color', new THREE.BufferAttribute(colorArray, 3));
 
       const pMat = new THREE.PointsMaterial({
-        size: 0.08,
+        size: renderMode === 'pointcloud' ? 0.09 : 0.01,
         vertexColors: true,
         transparent: true,
         opacity: renderMode === 'pointcloud' ? 0.95 : 0.0,
@@ -397,29 +710,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     if (controlsRef.current) {
       controlsRef.current.target.set(0, size.y / 2, 0);
     }
-  }, [modelData, isSoftwareGl]);
-
-  // Update materials on renderMode change
-  useEffect(() => {
-    if (!modelGroupRef.current) return;
-
-    modelGroupRef.current.children.forEach((child, idx) => {
-      if ((child as THREE.Mesh).isMesh) {
-        const mesh = child as THREE.Mesh;
-        const comp = modelData.components[idx];
-        if (comp) {
-          mesh.material = createMaterialForMode(comp.material, renderMode);
-          mesh.visible = renderMode !== 'pointcloud';
-        }
-      }
-    });
-
-    if (pointCloudMeshRef.current) {
-      const pMat = pointCloudMeshRef.current.material as THREE.PointsMaterial;
-      pMat.opacity = renderMode === 'pointcloud' ? 0.95 : 0.0;
-      pMat.size = renderMode === 'pointcloud' ? 0.09 : 0.01;
-    }
-  }, [renderMode, modelData]);
+  }, [workingComponents, renderMode, clipConfig, isSoftwareGl]);
 
   // Exploded View
   useEffect(() => {
@@ -560,7 +851,7 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           modelGroupRef.current || undefined
         );
       } else if (format === 'json') {
-        exportToJSON(modelData);
+        exportToJSON({ ...modelData, components: workingComponents });
       }
     } catch (err) {
       console.error('Export error:', err);
@@ -571,14 +862,71 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
     triggerHaptic('success');
   };
 
-  function createMaterialForMode(compMat: any, mode: RenderMode): THREE.Material {
+  function createMaterialForMode(
+    compMat: any,
+    mode: RenderMode,
+    compIndex: number = 0,
+    clipPlane: THREE.Plane | null = null
+  ): THREE.Material {
+    const planes = clipPlane ? [clipPlane] : [];
+
     switch (mode) {
+      case 'contrast_colors': {
+        const hex = CONTRAST_PALETTE[compIndex % CONTRAST_PALETTE.length];
+        return new THREE.MeshStandardMaterial({
+          color: new THREE.Color(hex),
+          roughness: 0.35,
+          metalness: 0.25,
+          clippingPlanes: planes,
+          clipShadows: true,
+        });
+      }
       case 'wireframe':
-        return new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true });
+        return new THREE.MeshBasicMaterial({ color: 0x38bdf8, wireframe: true, clippingPlanes: planes });
       case 'normals':
-        return new THREE.MeshNormalMaterial({ wireframe: false });
+        return new THREE.MeshNormalMaterial({ wireframe: false, clippingPlanes: planes });
+      case 'elevation':
+        return new THREE.MeshStandardMaterial({
+          vertexColors: true,
+          roughness: 0.4,
+          metalness: 0.15,
+          clippingPlanes: planes,
+          clipShadows: true,
+        });
+      case 'cavity':
+        return new THREE.MeshStandardMaterial({
+          color: new THREE.Color(compIndex === 1 ? 0x070b16 : 0x334155),
+          roughness: 0.95,
+          metalness: 0.05,
+          clippingPlanes: planes,
+          clipShadows: true,
+        });
       case 'clay':
-        return new THREE.MeshStandardMaterial({ color: 0xd4d4d8, roughness: 0.85, metalness: 0.05 });
+        return new THREE.MeshStandardMaterial({
+          color: 0xd4d4d8,
+          roughness: 0.85,
+          metalness: 0.05,
+          clippingPlanes: planes,
+          clipShadows: true,
+        });
+      case 'photo_texture': {
+        if (photoTexture) {
+          return new THREE.MeshStandardMaterial({
+            map: photoTexture,
+            roughness: 0.35,
+            metalness: 0.15,
+            clippingPlanes: planes,
+            clipShadows: true,
+          });
+        }
+        return new THREE.MeshStandardMaterial({
+          color: new THREE.Color(compMat.color || '#38bdf8'),
+          roughness: compMat.roughness ?? 0.35,
+          metalness: compMat.metalness ?? 0.1,
+          clippingPlanes: planes,
+          clipShadows: true,
+        });
+      }
       case 'textured':
       default:
         return new THREE.MeshStandardMaterial({
@@ -587,6 +935,8 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           metalness: compMat.metalness ?? 0.1,
           transparent: Boolean(compMat.transparent),
           opacity: compMat.opacity ?? 1.0,
+          clippingPlanes: planes,
+          clipShadows: true,
         });
     }
   }
@@ -615,6 +965,33 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
         </div>
 
         <div className="flex items-center gap-1.5">
+          {/* Comparar Foto vs 3D y Transferir Colores */}
+          <button
+            onClick={() => {
+              triggerHaptic('medium');
+              setShowPhotoCompare(true);
+            }}
+            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-cyan-500/25 active:scale-95 transition-all cursor-pointer"
+            title="Comparar fotos tomadas vs modelo 3D y transferir colores"
+          >
+            <Sliders className="w-3.5 h-3.5 text-white" />
+            <span className="hidden xs:inline">Foto vs 3D</span>
+          </button>
+
+          {/* Herramientas de Modificación 3D */}
+          <button
+            onClick={() => {
+              triggerHaptic('medium');
+              setShowEditorDrawer(true);
+            }}
+            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-zinc-950 font-bold text-xs flex items-center gap-1.5 shadow-lg shadow-amber-500/25 active:scale-95 transition-all cursor-pointer"
+            title="Herramientas 3D: Cortar, quitar piezas, agregar hoyos"
+          >
+            <Wrench className="w-3.5 h-3.5 text-zinc-950" />
+            <span className="hidden xs:inline">Modificar</span>
+            <span className="hidden md:inline">3D</span>
+          </button>
+
           {/* Menú Exportar Modelo */}
           <button
             onClick={() => {
@@ -722,11 +1099,15 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
           {/* Mode pills */}
           <div className="flex items-center justify-between gap-1 overflow-x-auto pb-1">
             {[
+              { id: 'photo_texture', label: 'Foto Textura' },
               { id: 'textured', label: 'PBR' },
-              { id: 'wireframe', label: 'Malla' },
-              { id: 'pointcloud', label: 'Puntos' },
+              { id: 'contrast_colors', label: 'Colores' },
               { id: 'normals', label: 'Normales' },
+              { id: 'elevation', label: 'Elevación' },
+              { id: 'cavity', label: 'Cavidades' },
+              { id: 'wireframe', label: 'Malla' },
               { id: 'clay', label: 'Arcilla' },
+              { id: 'pointcloud', label: 'Puntos' },
             ].map((mode) => (
               <button
                 key={mode.id}
@@ -734,15 +1115,27 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
                   triggerHaptic('light');
                   setRenderMode(mode.id as RenderMode);
                 }}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold whitespace-nowrap transition-all ${
+                className={`px-2 py-1 rounded-lg text-[10px] font-semibold whitespace-nowrap transition-all cursor-pointer ${
                   renderMode === mode.id
-                    ? 'bg-cyan-500 text-zinc-950 shadow-sm'
+                    ? 'bg-cyan-500 text-zinc-950 shadow-sm font-bold'
                     : 'bg-zinc-950/70 text-zinc-400 hover:text-zinc-200'
                 }`}
               >
                 {mode.label}
               </button>
             ))}
+
+            <button
+              onClick={() => {
+                triggerHaptic('medium');
+                setShowEditorDrawer(true);
+              }}
+              className="p-1 rounded-lg border bg-amber-950/80 border-amber-500/60 text-amber-300 text-xs flex items-center gap-1 transition-all cursor-pointer shadow hover:bg-amber-900 shrink-0"
+              title="Herramientas 3D: Cortar, Quitar, Agregar"
+            >
+              <Wrench className="w-3.5 h-3.5 text-amber-400" />
+              <span className="text-[10px] font-bold">Modificar</span>
+            </button>
 
             <button
               onClick={() => {
@@ -1069,6 +1462,52 @@ export const Viewport3D: React.FC<Viewport3DProps> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* 3D Modification Drawer Panel */}
+      <ModelEditorDrawer
+        isOpen={showEditorDrawer}
+        onClose={() => setShowEditorDrawer(false)}
+        components={workingComponents}
+        selectedIdx={selectedCompIdx}
+        onSelectComponent={setSelectedCompIdx}
+        onUpdateComponent={handleUpdateComponent}
+        onDeleteComponent={handleDeleteComponent}
+        onToggleVisibility={handleToggleVisibility}
+        onAddComponent={handleAddComponent}
+        onDuplicateComponent={handleDuplicateComponent}
+        onTrimNoise={handleTrimNoise}
+        onUndo={handleUndo}
+        canUndo={historyStack.length > 0}
+        onResetOriginal={handleResetOriginal}
+        clipConfig={clipConfig}
+        onChangeClipConfig={(cfg) => setClipConfig((prev) => ({ ...prev, ...cfg }))}
+        onApplyPermanentSlice={handleApplyPermanentSlice}
+      />
+
+      {/* Photo vs 3D Comparison & Color Transfer Modal */}
+      {showPhotoCompare && (
+        <PhotoCompareModal
+          modelData={modelData}
+          workingComponents={workingComponents}
+          onUpdateComponentColor={(idx, newColor) => {
+            const next = [...workingComponents];
+            next[idx] = {
+              ...next[idx],
+              material: { ...next[idx].material, color: newColor },
+            };
+            pushHistory(next);
+          }}
+          onApplyColorToAll={(newColor) => {
+            const next = workingComponents.map((c) => ({
+              ...c,
+              material: { ...c.material, color: newColor },
+            }));
+            pushHistory(next);
+          }}
+          onAlignCameraAngle={handleAlignCameraAngle}
+          onClose={() => setShowPhotoCompare(false)}
+        />
       )}
     </div>
   );

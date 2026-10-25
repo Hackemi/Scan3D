@@ -8,7 +8,7 @@ import { ModelInspector } from './components/ModelInspector';
 import { PWAInstallModal } from './components/PWAInstallModal';
 import { AndroidApkModal } from './components/AndroidApkModal';
 import { usePWAInstall } from './hooks/usePWAInstall';
-import { generate3DModelFromPhotos } from './utils/localPhotogrammetry';
+import { generate3DModelFromPhotos, createTextureAtlasFromPhotos } from './utils/localPhotogrammetry';
 import { SAMPLE_MODELS } from './utils/sampleData';
 import { soundEffects } from './utils/audio';
 import { triggerHaptic } from './utils/haptics';
@@ -32,7 +32,7 @@ type DeviceViewMode = 'desktop' | 'phone';
 export default function App() {
   const [screen, setScreen] = useState<AppScreen>('camera');
   const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<ScanCategory>('pieza_3d');
+  const [selectedCategory, setSelectedCategory] = useState<ScanCategory>('auto');
   const [currentModel, setCurrentModel] = useState<Model3DData | null>(null);
   const [objectHint, setObjectHint] = useState<string>('');
   const [showInspector, setShowInspector] = useState<boolean>(false);
@@ -182,6 +182,7 @@ export default function App() {
               source: 'gemini-3.8-flash',
               thumbnailUrl: photos[0]?.dataUrl,
               photosCount: photos.length,
+              sourcePhotos: photos,
             };
           }
         }
@@ -191,6 +192,9 @@ export default function App() {
 
       if (!reconstructedModel || reconstructedModel.components.length === 0) {
         reconstructedModel = await generate3DModelFromPhotos(photos, hint, selectedCategory);
+      } else if (!reconstructedModel.textureUrl && photos.length > 0) {
+        reconstructedModel.textureUrl = await createTextureAtlasFromPhotos(photos);
+        reconstructedModel.sourcePhotos = photos;
       }
 
       await new Promise((resolve) => setTimeout(resolve, 1400));
@@ -203,6 +207,7 @@ export default function App() {
     } catch (err) {
       console.error('Reconstruction error:', err);
       const fallback = await generate3DModelFromPhotos(photos, hint, selectedCategory);
+      fallback.sourcePhotos = photos;
       setCurrentModel(fallback);
       setScreen('viewer');
       soundEffects.playSuccess();
@@ -212,21 +217,6 @@ export default function App() {
   // Phone App Screen view
   const phoneAppContent = (
     <div className="relative w-full h-full flex flex-col overflow-hidden bg-black text-white">
-      {/* Mobile Top Status Bar */}
-      <div className="flex items-center justify-between px-5 pt-2 pb-1 bg-black text-[11px] font-semibold text-zinc-300 z-40 select-none">
-        <span className="font-mono tracking-tight">{currentTime}</span>
-
-        <div className="w-24 h-5 rounded-full bg-zinc-900 border border-zinc-800 flex items-center justify-center gap-1.5 shadow-inner">
-          <div className="w-2 h-2 rounded-full bg-cyan-400" />
-          <span className="text-[9px] font-mono text-cyan-300 font-bold">Scan3D</span>
-        </div>
-
-        <div className="flex items-center gap-1.5 text-zinc-400">
-          <Wifi className="w-3.5 h-3.5" />
-          <Battery className="w-4 h-4 text-zinc-300" />
-        </div>
-      </div>
-
       {/* Screen router */}
       <div className="relative flex-1 w-full overflow-hidden">
         {screen === 'camera' && (
